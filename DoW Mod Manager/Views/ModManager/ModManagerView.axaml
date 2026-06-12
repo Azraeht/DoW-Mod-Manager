@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DoW_Mod_Manager.ViewModels"
+             xmlns:models="using:DoW_Mod_Manager.Models"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="620"
+             x:Class="DoW_Mod_Manager.Views.ModManager.ModManagerView"
+             x:DataType="vm:ModManagerViewModel">
+
+    <Grid RowDefinitions="Auto,*,Auto,Auto" Margin="16">
+
+        <!-- Header: install selection -->
+        <StackPanel Grid.Row="0" Spacing="6">
+            <TextBlock Text="Dawn of War installation" FontWeight="SemiBold" />
+            <Grid ColumnDefinitions="*,Auto">
+                <ComboBox Grid.Column="0" HorizontalAlignment="Stretch"
+                          ItemsSource="{Binding Installs}"
+                          SelectedItem="{Binding SelectedInstall}" />
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" Opacity="0.7"
+                           Text="{Binding PlatformName}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" Watermark="…or paste a game folder path"
+                         Text="{Binding ManualPath}" />
+                <Button Grid.Column="1" Content="Load" Margin="8,0,0,0" Command="{Binding LoadManualPathCommand}" />
+            </Grid>
+        </StackPanel>
+
+        <!-- Middle: mods + required mods -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="0,4">
+            <DockPanel Grid.Column="0" Margin="0,0,8,0">
+                <TextBlock DockPanel.Dock="Top" Text="Installed mods" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <ListBox ItemsSource="{Binding Mods}" SelectedItem="{Binding SelectedMod}" />
+            </DockPanel>
+
+            <DockPanel Grid.Column="1" Margin="8,0,0,0">
+                <TextBlock DockPanel.Dock="Top" Text="Required mods" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <ListBox ItemsSource="{Binding RequiredMods}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:ModDependencyStatus">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="{Binding RequiredModName}" />
+                                <TextBlock Grid.Column="1" Text="INSTALLED" Foreground="LimeGreen"
+                                           IsVisible="{Binding IsInstalled}" />
+                                <TextBlock Grid.Column="1" Text="MISSING" Foreground="#FF5555"
+                                           IsVisible="{Binding !IsInstalled}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+
+        <!-- Launch options -->
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+            <WrapPanel Grid.Column="0">
+                <CheckBox Content="-dev" IsChecked="{Binding Dev}" Margin="0,0,12,0" />
+                <CheckBox Content="-nomovies" IsChecked="{Binding NoMovies}" Margin="0,0,12,0" />
+                <CheckBox Content="-forcehighpoly" IsChecked="{Binding ForceHighPoly}" Margin="0,0,12,0" />
+                <CheckBox Content="-noprecachemodels" IsChecked="{Binding NoPrecacheModels}" Margin="0,0,12,0" />
+                <CheckBox Content="Disable fog (Soulstorm)" IsChecked="{Binding NoFog}"
+                          IsEnabled="{Binding NoFogEnabled}" Margin="0,0,12,0" />
+                <CheckBox Content="CPU affinity / high priority" IsChecked="{Binding CpuAffinityOptimization}"
+                          IsEnabled="{Binding PerfTweaksSupported}" Margin="0,0,12,0" />
+            </WrapPanel>
+            <TextBlock Grid.Column="1" Text="{Binding LaaStatus}" VerticalAlignment="Center" Opacity="0.8" />
+        </Grid>
+
+        <!-- Actions + status -->
+        <StackPanel Grid.Row="3" Spacing="8">
+            <WrapPanel>
+                <Button Content="START MOD" Classes="accent" Margin="0,0,8,0"
+                        Command="{Binding StartModCommand}" />
+                <Button Content="START BASE GAME" Margin="0,0,8,0"
+                        Command="{Binding StartBaseGameCommand}" />
+                <Button Content="Open mod folder" Margin="0,0,8,0"
+                        Command="{Binding OpenModFolderCommand}" />
+                <Button Content="Check for errors" Margin="0,0,8,0"
+                        Command="{Binding CheckForErrorsCommand}" />
+                <Button Content="Toggle LAA" Command="{Binding ToggleLaaCommand}" />
+            </WrapPanel>
+            <Border Background="#1AFFFFFF" CornerRadius="4" Padding="8" MinHeight="48">
+                <SelectableTextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+            </Border>
+        </StackPanel>
+    </Grid>
+</UserControl>

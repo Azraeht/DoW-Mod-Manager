@@ -1,25 +1,15 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using DoW_Mod_Manager.Abstractions;
-
 namespace DoW_Mod_Manager.ViewModels;
 
 /// <summary>
-/// Shell ViewModel. WS5 replaces the placeholder content with the ported ModManager view and
-/// navigation between the feature windows.
+/// Shell ViewModel. Hosts the ModManager screen as its main content. WS5 extends this with
+/// navigation to the other feature windows (Mod Merger, Settings, Performance, Downloader…).
 /// </summary>
 public partial class MainWindowViewModel : ViewModelBase
 {
-    private readonly IPlatformService _platform;
+    public ModManagerViewModel ModManager { get; }
 
-    [ObservableProperty]
-    private string _greeting = "DoW Mod Manager — native port (WS0 foundation)";
-
-    [ObservableProperty]
-    private string _platformName;
-
-    public MainWindowViewModel(IPlatformService platform)
+    public MainWindowViewModel(ModManagerViewModel modManager)
     {
-        _platform = platform;
-        _platformName = platform.IsWindows ? "Windows" : "Linux / Unix";
+        ModManager = modManager;
     }
 }

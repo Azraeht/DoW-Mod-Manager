@@ -1,6 +1,10 @@
 using System;
 using DoW_Mod_Manager.Abstractions;
+using DoW_Mod_Manager.Platform.Linux;
 using DoW_Mod_Manager.Platform.Stubs;
+#if WINDOWS
+using DoW_Mod_Manager.Platform.Windows;
+#endif
 using DoW_Mod_Manager.Services;
 using DoW_Mod_Manager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,16 +26,22 @@ public static class ServiceConfiguration
     }
 
     /// <summary>
-    /// Selects the OS-specific <see cref="IPlatformService"/>. Replaced in WS7 with
-    /// <c>AddWindowsPlatform()</c> / <c>AddLinuxPlatform()</c> once WS1/WS2 land; until then a
-    /// safe stub keeps the shell runnable everywhere.
+    /// Selects the OS-specific <see cref="IPlatformService"/>: <c>WindowsPlatformService</c>
+    /// (WS1) on Windows, <c>LinuxPlatformService</c> (WS2) on Linux, otherwise a safe no-op
+    /// stub. The Windows registration is behind <c>#if WINDOWS</c> because its P/Invoke code
+    /// only compiles under the net8.0-windows target.
     /// </summary>
     public static IServiceCollection AddPlatformServices(this IServiceCollection services)
     {
-        // WS7 seam:
-        //   if (OperatingSystem.IsWindows()) return services.AddWindowsPlatform();
-        //   if (OperatingSystem.IsLinux())   return services.AddLinuxPlatform();
-        services.AddSingleton<IPlatformService, StubPlatformService>();
+#if WINDOWS
+        if (OperatingSystem.IsWindows())
+            services.AddWindowsPlatform();
+        else
+#endif
+        if (OperatingSystem.IsLinux())
+            services.AddLinuxPlatform();
+        else
+            services.AddSingleton<IPlatformService, StubPlatformService>();
 
         // Convenience: expose the sub-services directly so ViewModels can take fine-grained deps.
         services.AddSingleton(sp => sp.GetRequiredService<IPlatformService>().Launcher);
@@ -51,6 +61,7 @@ public static class ServiceConfiguration
     public static IServiceCollection AddViewModels(this IServiceCollection services)
     {
         services.AddSingleton<MainWindowViewModel>();
+        services.AddSingleton<ModManagerViewModel>();
         return services;
     }
 }
