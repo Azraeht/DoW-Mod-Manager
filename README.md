@@ -4,7 +4,7 @@
 
 This application allows for an easy launch of mods and management of large collections of mods for Warhammer 40K Dawn of War series.
 
-## INSTALLATION:
+## INSTALLATION (Windows):
 
 - In order to install the Mod Manager drop the "DoW Mod Manager v2.7.0.1.exe" into your primary game directory which is either:
 
@@ -17,6 +17,35 @@ This application allows for an easy launch of mods and management of large colle
   - "..\Dawn of War - Gold\"
 
   DO NOT put executable file into a subfolder or it won't work!
+
+## INSTALLATION (Linux — native):
+
+Starting with v3.0 the Mod Manager runs **natively on Linux** (.NET 8 + Avalonia). It no
+longer needs to sit inside the game folder, and you do **not** have to configure Wine
+yourself — the manager detects your Steam/Proton installation and launches the game
+through Proton (falling back to plain Wine). The game itself stays a Windows executable run
+under Proton; only the manager is native.
+
+1. Download the latest `DoW_Mod_Manager-x86_64.AppImage` from the Releases page.
+2. Make it executable and run it:
+
+   ```bash
+   chmod +x DoW_Mod_Manager-x86_64.AppImage
+   ./DoW_Mod_Manager-x86_64.AppImage
+   ```
+
+3. The manager auto-discovers Dawn of War installs from your Steam libraries
+   (`steamapps/common/Dawn of War*`). If it cannot find one, paste the game folder path into
+   the field at the top and press **Load**.
+
+Requirements: a Steam install of Dawn of War with Proton enabled (Steam Play). Override the
+Proton/Wine binary with the `DOWMM_PROTON` / `DOWMM_WINE` environment variables if needed.
+Performance tweaks (timer resolution, power plans, fog removal) are Windows-only and are
+greyed out on Linux.
+
+> Building from source: `dotnet publish "DoW Mod Manager/DowModManager.csproj" -f net8.0 -r
+> linux-x64 --self-contained -p:PublishSingleFile=true -o artifacts/linux-x64`, then
+> `bash packaging/linux/build-appimage.sh artifacts/linux-x64`. See `docs/ARCHITECTURE.md`.
 
 ## MOD MANAGER USAGE:
 
