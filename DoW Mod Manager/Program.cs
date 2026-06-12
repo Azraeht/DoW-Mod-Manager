@@ -1,36 +1,18 @@
-﻿using System;
-using System.Windows.Forms;
+using System;
+using Avalonia;
 
-namespace DoW_Mod_Manager
+namespace DoW_Mod_Manager;
+
+internal static class Program
 {
-    static class Program
-    {
-        /// <summary>
-        /// This method properly terminates the Application
-        /// </summary>
-        public static void TerminateApp()
-        {
-            if (Application.MessageLoop)
-            {
-                // it's an WinForms app
-                Application.Exit();
-            }
-            else
-            {
-                // It's a Console app
-                Environment.Exit(1);
-            }
-        }
+    // Avalonia configuration; the visual designer also needs this exact signature.
+    [STAThread]
+    public static void Main(string[] args) => BuildAvaloniaApp()
+        .StartWithClassicDesktopLifetime(args);
 
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        [STAThread]
-        static void Main()
-        {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new ModManagerForm());
-        }
-    }
+    public static AppBuilder BuildAvaloniaApp()
+        => AppBuilder.Configure<App>()
+            .UsePlatformDetect()
+            .WithInterFont()
+            .LogToTrace();
 }
