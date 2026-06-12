@@ -1,6 +1,7 @@
 using System;
 using DoW_Mod_Manager.Abstractions;
 using DoW_Mod_Manager.Platform.Stubs;
+using DoW_Mod_Manager.Services;
 using DoW_Mod_Manager.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -42,12 +43,9 @@ public static class ServiceConfiguration
         return services;
     }
 
-    /// <summary>Cross-platform domain services (WS3 registers parsers, mod/download services here).</summary>
+    /// <summary>Cross-platform domain services (WS3: parsers, mod/download/settings/LAA services).</summary>
     public static IServiceCollection AddCoreServices(this IServiceCollection services)
-    {
-        // WS3 fills this in (IModuleParser, IModService, IDownloadService, ISettingsStore, ...).
-        return services;
-    }
+        => services.AddDomainServices();
 
     /// <summary>MVVM ViewModels (WS4 shell + WS5 feature windows).</summary>
     public static IServiceCollection AddViewModels(this IServiceCollection services)
