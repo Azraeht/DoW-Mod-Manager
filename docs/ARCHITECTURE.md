@@ -36,8 +36,11 @@ DoW Mod Manager/
 
 - `AddPlatformServices()` — selects the OS `IPlatformService`. **WS7 seam**: replace the stub
   registration with `AddWindowsPlatform()` / `AddLinuxPlatform()` extension methods that WS1/WS2
-  provide. Sub-services (`IGameLauncher`, `IFileSystemService`, …) are already re-exported from
-  the aggregate so ViewModels can depend on them directly.
+  provide. Sub-services (`IGameLauncher`, `IFileSystemService`, …) are re-exported from the
+  aggregate with `TryAddSingleton`, so ViewModels can depend on them directly. It must stay
+  `TryAdd`: the Linux module registers the sub-services itself and builds `IPlatformService` from
+  them, so an unconditional re-export is a resolution cycle (the app froze at start-up;
+  `CompositionTests` guards against it).
 - `AddCoreServices()` — WS3 registers its parsers/services here.
 - `AddViewModels()` — WS4/WS5 register feature ViewModels here.
 
@@ -102,3 +105,33 @@ export PATH="$HOME/.dotnet:$PATH"
 dotnet build  "DoW Mod Manager/DowModManager.csproj"
 dotnet run    --project "DoW Mod Manager/DowModManager.csproj" --framework net8.0
 ```
+
+## Feature windows (WS5)
+
+Secondary windows are opened through two seams so ViewModels never reference Avalonia windows:
+
+- `ViewModels/IDialogService` — message/confirm boxes, file picker, open URL, and
+  `ShowWindow(viewModel)`. Implemented by `Views/DialogService` (maps each ViewModel type to its
+  window, keeps one window per type, closes it on `ViewModelBase.CloseRequested` and calls
+  `OnClosed()`).
+- `ViewModels/IFeatureViewModelFactory` — builds the feature ViewModels with their runtime
+  context (selected `GameInstall`, callbacks into the main screen) via `ActivatorUtilities`.
+
+| Window | ViewModel | Domain service |
+|---|---|---|
+| Mod Merger | `ModMergerViewModel` | `IModMergerService` — edits the `RequiredMod` block, always into a `<Mod>_MERGED.module` copy |
+| Mod Downloader | `ModDownloaderViewModel` | `IModlistService` — curated list cached in the user data dir, refreshed from GitHub |
+| Settings Manager | `SettingsViewModel` | `IGameSettingsService` — `Local.ini`, `Drivers/spdx9_config.txt`, profiles, `playercfg.lua` |
+| System Performance | `SystemPerformanceViewModel` | `ISystemPerformanceService` (Windows only; explanatory text on Linux) |
+| Fonts Manager | `FontsManagerViewModel` | `IFontsService` — `*.fnt` of the larger-fonts mod, `defaults.zip` backup |
+| About | `AboutViewModel` | — |
+
+The main screen also toggles the "better camera" / "larger fonts" downloads (`IGameExtrasService`)
+and DXVK (`IGraphicsModService`, hidden under Proton).
+
+Game paths are resolved through `Services/GamePaths`, which matches each segment
+case-insensitively: the legacy code mixed `Data`/`data`, and files referenced by the game
+(e.g. `ANSNB___.TTF` in `.fnt` files) only resolve on Linux that way.
+
+`tests/DowModManager.Tests/Ui/WindowSmokeTests` opens every window headlessly (Avalonia.Headless)
+on a fake Soulstorm install and fails on binding errors; set `DMM_SCREENSHOTS=<dir>` to save PNGs.

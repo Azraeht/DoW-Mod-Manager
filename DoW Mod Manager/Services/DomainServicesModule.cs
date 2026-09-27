@@ -15,9 +15,14 @@ namespace DoW_Mod_Manager.Services
             services.AddSingleton<IWarningsLogService, WarningsLogService>();
             services.AddSingleton<ILaaService, LaaService>();
             services.AddSingleton<ISettingsStore, IniSettingsStore>();
+            services.AddSingleton<IModMergerService, ModMergerService>();
+            services.AddSingleton<IGameSettingsService, GameSettingsService>();
+            services.AddSingleton<IFontsService, FontsService>();
 
             // Typed HttpClient for the download service (cross-platform).
             services.AddHttpClient<IDownloadService, DownloadService>();
+            services.AddSingleton<IModlistService, ModlistService>();
+            services.AddSingleton<IGameExtrasService, GameExtrasService>();
 
             return services;
         }

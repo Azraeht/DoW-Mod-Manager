@@ -7,7 +7,9 @@ using DoW_Mod_Manager.Platform.Windows;
 #endif
 using DoW_Mod_Manager.Services;
 using DoW_Mod_Manager.ViewModels;
+using DoW_Mod_Manager.Views;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DoW_Mod_Manager.Composition;
 
@@ -44,12 +46,14 @@ public static class ServiceConfiguration
             services.AddSingleton<IPlatformService, StubPlatformService>();
 
         // Convenience: expose the sub-services directly so ViewModels can take fine-grained deps.
-        services.AddSingleton(sp => sp.GetRequiredService<IPlatformService>().Launcher);
-        services.AddSingleton(sp => sp.GetRequiredService<IPlatformService>().FileSystem);
-        services.AddSingleton(sp => sp.GetRequiredService<IPlatformService>().Performance);
-        services.AddSingleton(sp => sp.GetRequiredService<IPlatformService>().Gpu);
-        services.AddSingleton(sp => sp.GetRequiredService<IPlatformService>().InstallLocator);
-        services.AddSingleton(sp => sp.GetRequiredService<IPlatformService>().GraphicsMods);
+        // TryAdd: the Linux module already registers the sub-services and builds IPlatformService
+        // from them, so re-registering them through IPlatformService would be a resolution cycle.
+        services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().Launcher);
+        services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().FileSystem);
+        services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().Performance);
+        services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().Gpu);
+        services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().InstallLocator);
+        services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().GraphicsMods);
         return services;
     }
 
@@ -62,6 +66,8 @@ public static class ServiceConfiguration
     {
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<ModManagerViewModel>();
+        services.AddSingleton<IFeatureViewModelFactory, FeatureViewModelFactory>();
+        services.AddSingleton<IDialogService, DialogService>();
         return services;
     }
 }

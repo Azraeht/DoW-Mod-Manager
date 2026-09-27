@@ -36,7 +36,10 @@
 
             <DockPanel Grid.Column="1" Margin="8,0,0,0">
                 <TextBlock DockPanel.Dock="Top" Text="Required mods" FontWeight="SemiBold" Margin="0,0,0,6" />
-                <ListBox ItemsSource="{Binding RequiredMods}">
+                <Button DockPanel.Dock="Bottom" Content="Fix missing mod" Margin="0,6,0,0"
+                        Command="{Binding FixMissingModCommand}"
+                        ToolTip.Tip="Select a MISSING required mod to look it up in the Mod Downloader" />
+                <ListBox ItemsSource="{Binding RequiredMods}" SelectedItem="{Binding SelectedRequiredMod}">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="models:ModDependencyStatus">
                             <Grid ColumnDefinitions="*,Auto">
@@ -79,6 +82,16 @@
                 <Button Content="Check for errors" Margin="0,0,8,0"
                         Command="{Binding CheckForErrorsCommand}" />
                 <Button Content="Toggle LAA" Command="{Binding ToggleLaaCommand}" />
+            </WrapPanel>
+            <WrapPanel>
+                <Button Content="Mod Downloader" Margin="0,0,8,0" Command="{Binding OpenModDownloaderCommand}" />
+                <Button Content="Mod Merger" Margin="0,0,8,0" Command="{Binding OpenModMergerCommand}" />
+                <Button Content="Settings" Margin="0,0,8,0" Command="{Binding OpenSettingsCommand}" />
+                <Button Content="{Binding CameraLabel}" Margin="0,0,8,0" Command="{Binding ToggleCameraCommand}" />
+                <Button Content="{Binding LargerFontsLabel}" Margin="0,0,8,0" Command="{Binding ToggleLargerFontsCommand}" />
+                <Button Content="{Binding DxvkLabel}" Margin="0,0,8,0" Command="{Binding ToggleDxvkCommand}"
+                        IsVisible="{Binding DxvkApplicable}" />
+                <Button Content="About" Command="{Binding OpenAboutCommand}" />
             </WrapPanel>
             <Border Background="#1AFFFFFF" CornerRadius="4" Padding="8" MinHeight="48">
                 <SelectableTextBlock Text="{Binding Status}" TextWrapping="Wrap" />

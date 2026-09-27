@@ -1,3 +1,4 @@
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DoW_Mod_Manager.ViewModels;
@@ -10,4 +11,13 @@ namespace DoW_Mod_Manager.ViewModels;
 /// </summary>
 public abstract partial class ViewModelBase : ObservableObject
 {
+    /// <summary>Raised when the ViewModel asks its window to close (e.g. a CLOSE button).</summary>
+    public event EventHandler? CloseRequested;
+
+    protected void RequestClose() => CloseRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Called by the view layer once the hosting window has closed. Release timers etc. here.</summary>
+    public virtual void OnClosed()
+    {
+    }
 }

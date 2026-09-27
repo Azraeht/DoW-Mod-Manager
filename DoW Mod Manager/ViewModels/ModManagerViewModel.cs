@@ -27,6 +27,10 @@ public partial class ModManagerViewModel : ViewModelBase
     private readonly IWarningsLogService _warnings;
     private readonly ILaaService _laa;
     private readonly ISettingsStore _settings;
+    private readonly IDialogService _dialogs;
+    private readonly IFeatureViewModelFactory _features;
+    private readonly IGameExtrasService _extras;
+    private readonly IGraphicsModService _graphics;
 
     public ObservableCollection<GameInstall> Installs { get; } = [];
     public ObservableCollection<ModInfo> Mods { get; } = [];
@@ -35,9 +39,26 @@ public partial class ModManagerViewModel : ViewModelBase
     [ObservableProperty] private GameInstall? _selectedInstall;
     [ObservableProperty] private ModInfo? _selectedMod;
 
+    [NotifyCanExecuteChangedFor(nameof(FixMissingModCommand))]
+    [ObservableProperty] private ModDependencyStatus? _selectedRequiredMod;
+
     [ObservableProperty] private string _manualPath = "";
     [ObservableProperty] private string _status = "Discovering Dawn of War installations…";
     [ObservableProperty] private string _laaStatus = "";
+
+    // Optional game tweaks (legacy camera / larger fonts / DXVK buttons).
+    [NotifyPropertyChangedFor(nameof(CameraLabel))]
+    [ObservableProperty] private bool _isCameraInstalled;
+
+    [NotifyPropertyChangedFor(nameof(LargerFontsLabel))]
+    [ObservableProperty] private bool _isLargerFontsInstalled;
+
+    [NotifyPropertyChangedFor(nameof(DxvkLabel))]
+    [ObservableProperty] private bool _isDxvkInstalled;
+
+    public string CameraLabel => IsCameraInstalled ? "Remove better camera" : "Install better camera";
+    public string LargerFontsLabel => IsLargerFontsInstalled ? "Remove larger fonts" : "Install larger fonts";
+    public string DxvkLabel => IsDxvkInstalled ? "Remove DXVK" : "Install DXVK";
 
     // Launch options (persisted to DoW Mod Manager.ini).
     [ObservableProperty] private bool _dev;
@@ -62,6 +83,9 @@ public partial class ModManagerViewModel : ViewModelBase
 
     public bool PerfTweaksSupported => _platform.IsWindows;
 
+    /// <summary>DXVK is bundled with Proton on Linux, so the toggle only shows on Windows.</summary>
+    public bool DxvkApplicable => _graphics.IsDxvkApplicable;
+
     public ModManagerViewModel(
         IPlatformService platform,
         IGameInstallLocator locator,
@@ -70,7 +94,11 @@ public partial class ModManagerViewModel : ViewModelBase
         IFileSystemService files,
         IWarningsLogService warnings,
         ILaaService laa,
-        ISettingsStore settings)
+        ISettingsStore settings,
+        IDialogService dialogs,
+        IFeatureViewModelFactory features,
+        IGameExtrasService extras,
+        IGraphicsModService graphics)
     {
         _platform = platform;
         _locator = locator;
@@ -80,6 +108,10 @@ public partial class ModManagerViewModel : ViewModelBase
         _warnings = warnings;
         _laa = laa;
         _settings = settings;
+        _dialogs = dialogs;
+        _features = features;
+        _extras = extras;
+        _graphics = graphics;
 
         _ = InitializeAsync();
     }
@@ -124,11 +156,12 @@ public partial class ModManagerViewModel : ViewModelBase
         LoadSettings(value);
         LoadMods(value);
         RefreshLaaStatus(value);
+        _ = RefreshExtrasAsync(value);
     }
 
     partial void OnSelectedModChanged(ModInfo? value) => ResolveDependencies();
 
-    private void LoadMods(GameInstall install)
+    private void LoadMods(GameInstall install, string? select = null)
     {
         Mods.Clear();
         RequiredMods.Clear();
@@ -137,7 +170,7 @@ public partial class ModManagerViewModel : ViewModelBase
             foreach (var mod in _mods.GetPlayableMods(install.InstallDir, install.IsOldGame))
                 Mods.Add(mod);
 
-            SelectedMod = Mods.FirstOrDefault();
+            SelectedMod = Mods.FirstOrDefault(m => m.Name == select) ?? Mods.FirstOrDefault();
             if (Mods.Count == 0)
                 Status = "No playable mods found in this installation.";
         }
@@ -258,6 +291,7 @@ public partial class ModManagerViewModel : ViewModelBase
         if (Installs.All(g => g.InstallDir != install.InstallDir))
             Installs.Add(install);
         SelectedInstall = install;
+        Status = $"Loaded {install.Variant} from {install.InstallDir}.";
     }
 
     [RelayCommand]
@@ -316,6 +350,134 @@ public partial class ModManagerViewModel : ViewModelBase
         catch
         {
             LaaStatus = "LAA: unknown";
+        }
+    }
+
+    // ------------------------------------------------------------------ secondary windows
+
+    /// <summary>Re-reads the mod list (e.g. after the merger created a <c>_MERGED</c> module).</summary>
+    private void ReloadMods()
+    {
+        if (SelectedInstall is not null)
+            LoadMods(SelectedInstall, SelectedMod?.Name);
+    }
+
+    /// <summary>Settings presets can toggle -forcehighpoly / -noprecachemodels (legacy ChangeSetting).</summary>
+    private void ApplyLaunchFlags(LaunchFlagChange change)
+    {
+        if (change.ForceHighPoly is bool highPoly)
+            ForceHighPoly = highPoly;
+        if (change.NoPrecacheModels is bool noPrecache)
+            NoPrecacheModels = noPrecache;
+        if (SelectedInstall is not null)
+            SaveSettings(SelectedInstall);
+    }
+
+    [RelayCommand]
+    private void OpenModMerger()
+    {
+        if (SelectedInstall is not null)
+            _dialogs.ShowWindow(_features.CreateModMerger(SelectedInstall, ReloadMods));
+    }
+
+    [RelayCommand]
+    private void OpenModDownloader()
+    {
+        if (SelectedInstall is not null)
+            _dialogs.ShowWindow(_features.CreateModDownloader(SelectedInstall));
+    }
+
+    private bool CanFixMissingMod => SelectedRequiredMod is { IsInstalled: false };
+
+    [RelayCommand(CanExecute = nameof(CanFixMissingMod))]
+    private async Task FixMissingModAsync()
+    {
+        if (SelectedInstall is null || SelectedRequiredMod is null)
+            return;
+
+        string name = SelectedRequiredMod.RequiredModName.Replace(".module", "").Trim();
+        if (name is "DXP2" or "WXP" or "W40k")
+        {
+            await _dialogs.ShowMessageAsync("You are missing one of the base modules! Reinstall the game to fix it.", "Warning!");
+            return;
+        }
+
+        _dialogs.ShowWindow(_features.CreateModDownloader(SelectedInstall, name));
+    }
+
+    [RelayCommand]
+    private void OpenSettings()
+    {
+        if (SelectedInstall is not null)
+            _dialogs.ShowWindow(_features.CreateSettings(SelectedInstall, ApplyLaunchFlags));
+    }
+
+    [RelayCommand]
+    private void OpenAbout() => _dialogs.ShowWindow(_features.CreateAbout());
+
+    // ------------------------------------------------------------------ optional tweaks
+
+    private async Task RefreshExtrasAsync(GameInstall install)
+    {
+        IsCameraInstalled = _extras.IsCameraInstalled(install.InstallDir);
+        IsLargerFontsInstalled = _extras.IsLargerFontsInstalled(install.InstallDir);
+        try
+        {
+            IsDxvkInstalled = DxvkApplicable && await _graphics.IsDxvkInstalledAsync(install);
+        }
+        catch
+        {
+            IsDxvkInstalled = false;
+        }
+    }
+
+    [RelayCommand]
+    private Task ToggleCameraAsync() => ToggleExtraAsync(
+        IsCameraInstalled, "better camera",
+        dir => _extras.InstallCameraAsync(dir),
+        dir => { _extras.RemoveCamera(dir); return Task.CompletedTask; });
+
+    [RelayCommand]
+    private Task ToggleLargerFontsAsync() => ToggleExtraAsync(
+        IsLargerFontsInstalled, "larger fonts",
+        dir => _extras.InstallLargerFontsAsync(dir),
+        dir => { _extras.RemoveLargerFonts(dir); return Task.CompletedTask; });
+
+    [RelayCommand]
+    private Task ToggleDxvkAsync() => ToggleExtraAsync(
+        IsDxvkInstalled, "DXVK",
+        _ => _graphics.InstallDxvkAsync(SelectedInstall!),
+        _ => _graphics.RemoveDxvkAsync(SelectedInstall!));
+
+    private async Task ToggleExtraAsync(bool installed, string name, Func<string, Task> install, Func<string, Task> remove)
+    {
+        if (SelectedInstall is null || Busy)
+            return;
+
+        var game = SelectedInstall;
+        Busy = true;
+        try
+        {
+            if (installed)
+            {
+                await remove(game.InstallDir);
+                Status = $"The {name} tweak is disabled and deleted.";
+            }
+            else
+            {
+                Status = $"Downloading {name}…";
+                await install(game.InstallDir);
+                Status = $"The {name} tweak is downloaded and enabled.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Status = $"Could not change {name}: {ex.Message}";
+        }
+        finally
+        {
+            Busy = false;
+            await RefreshExtrasAsync(game);
         }
     }
 }
