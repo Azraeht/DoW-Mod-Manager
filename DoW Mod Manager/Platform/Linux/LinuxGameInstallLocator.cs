@@ -23,7 +23,8 @@ public sealed partial class LinuxGameInstallLocator : IGameInstallLocator
     private const string WinterAssaultExe = "W40kWA.exe";
     private const string OriginalExe = "W40k.exe";
 
-    // Steam appid <-> variant mapping. ASSUMPTION (documented in the WS2 spec):
+    // Fallback Steam appid <-> variant mapping, used only when no appmanifest names the game
+    // folder (the manifest's appid wins, which also covers e.g. the Definitive Edition). ASSUMPTION (documented in the WS2 spec):
     //   Soulstorm = 9450, Dark Crusade = 4570, Winter Assault = 4580, Original (DoW GOTY) = 4570.
     // Dark Crusade and the Original GOTY share the 4570 app family on Steam, so we resolve the
     // actual variant from the executables present on disk; the appid is only used to locate the
@@ -43,7 +44,7 @@ public sealed partial class LinuxGameInstallLocator : IGameInstallLocator
     {
         var results = new List<GameInstall>();
 
-        foreach (var steamRoot in EnumerateSteamRoots())
+        foreach (var steamRoot in SteamPaths.ExistingRoots())
         {
             ct.ThrowIfCancellationRequested();
 
@@ -70,7 +71,8 @@ public sealed partial class LinuxGameInstallLocator : IGameInstallLocator
                     if (variant is null)
                         continue;
 
-                    var appId = AppIdForVariant(variant.Value);
+                    var appId = SteamPaths.ReadAppId(Path.Combine(library, "steamapps"), gameDir)
+                                ?? AppIdForVariant(variant.Value);
                     var compatData = Path.Combine(library, "steamapps", "compatdata", appId.ToString());
 
                     results.Add(new GameInstall
@@ -122,10 +124,11 @@ public sealed partial class LinuxGameInstallLocator : IGameInstallLocator
             var steamAppsDir = LocateSteamAppsDir(directory);
             if (steamAppsDir is not null)
             {
+                appId = SteamPaths.ReadAppId(steamAppsDir, directory) ?? appId;
                 protonPrefix = Path.Combine(steamAppsDir, "compatdata", appId.Value.ToString());
                 // The Steam root is the parent of the steamapps dir's library; the client
                 // install path is normally ~/.steam/steam, so fall back to that.
-                steamRoot = DefaultSteamRoots().FirstOrDefault(Directory.Exists);
+                steamRoot = SteamPaths.ExistingRoots().FirstOrDefault();
             }
         }
 
@@ -172,19 +175,6 @@ public sealed partial class LinuxGameInstallLocator : IGameInstallLocator
         }
         return null;
     }
-
-    /// <summary>Candidate Steam client install roots (STEAM_COMPAT_CLIENT_INSTALL_PATH).</summary>
-    private static IEnumerable<string> DefaultSteamRoots()
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        yield return Path.Combine(home, ".steam", "steam");
-        yield return Path.Combine(home, ".steam", "root");
-        yield return Path.Combine(home, ".local", "share", "Steam");
-        yield return Path.Combine(home, ".var", "app", "com.valvesoftware.Steam", "data", "Steam");
-    }
-
-    private static IEnumerable<string> EnumerateSteamRoots()
-        => DefaultSteamRoots().Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Reads <c>steamapps/libraryfolders.vdf</c> and returns every library root (the Steam

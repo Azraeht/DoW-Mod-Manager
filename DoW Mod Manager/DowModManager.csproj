@@ -16,6 +16,9 @@
     <!-- Avalonia: keep the compiled XAML name generator happy -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <!-- Single-file publish must embed SkiaSharp/HarfBuzz native libs, otherwise
+         Avalonia fails at startup with DllNotFoundException: libSkiaSharp. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <!-- Legacy WinForms sources are kept for reference only, never compiled. -->

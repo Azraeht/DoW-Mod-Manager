@@ -12,7 +12,9 @@ using DoW_Mod_Manager.Models;
 namespace DoW_Mod_Manager.Platform.Linux;
 
 /// <summary>
-/// Launches Dawn of War on Linux through Steam Proton (preferred) or a plain Wine fallback.
+/// Launches Dawn of War on Linux. Steam installs go through the Steam client
+/// (<c>steam -applaunch</c>) so the game runs with the Proton version and runtime container the
+/// user configured for it; otherwise Proton is invoked directly, with a plain Wine fallback.
 /// The legacy Windows post-launch tweaks (CPU affinity, in-memory fog removal) are Windows-only
 /// and become no-ops here; when requested but unsupported, that is noted in
 /// <see cref="GameLaunchResult.Detail"/>.
@@ -37,10 +39,19 @@ public sealed class LinuxGameLauncher : IGameLauncher
         try
         {
             var protonPath = ResolveProton();
+            var steamPath = FindOnPath("steam");
             ProcessStartInfo psi;
             string launchDescription;
 
-            if (protonPath is not null)
+            // An explicit DOWMM_PROTON override always wins over going through Steam.
+            var protonOverridden = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ProtonOverrideEnv));
+
+            if (!protonOverridden && steamPath is not null
+                && game.Distribution == GameDistribution.Steam && game.SteamAppId is not null)
+            {
+                psi = BuildSteamStartInfo(game, steamPath, arguments, workingDir, out launchDescription);
+            }
+            else if (protonPath is not null)
             {
                 psi = BuildProtonStartInfo(game, protonPath, arguments, workingDir, out launchDescription);
             }
@@ -92,6 +103,31 @@ public sealed class LinuxGameLauncher : IGameLauncher
         }
     }
 
+    // ---- Steam ------------------------------------------------------------------------------
+
+    /// <summary>
+    /// <c>steam -applaunch &lt;appid&gt; &lt;args&gt;</c>: Steam picks the per-game compat tool
+    /// (CompatToolMapping), wraps it in the Steam Linux Runtime and handles DRM. Invoking Proton
+    /// ourselves would pick an arbitrary version and could upgrade the game's prefix.
+    /// </summary>
+    private static ProcessStartInfo BuildSteamStartInfo(
+        GameInstall game, string steamPath, string arguments, string workingDir, out string description)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = steamPath,
+            WorkingDirectory = workingDir,
+            UseShellExecute = false
+        };
+        psi.ArgumentList.Add("-applaunch");
+        psi.ArgumentList.Add(game.SteamAppId!.Value.ToString());
+        foreach (var arg in SplitArguments(arguments))
+            psi.ArgumentList.Add(arg);
+
+        description = $"Steam: \"{steamPath}\" -applaunch {game.SteamAppId} {arguments}";
+        return psi;
+    }
+
     // ---- Proton -----------------------------------------------------------------------------
 
     private static ProcessStartInfo BuildProtonStartInfo(
@@ -141,17 +177,8 @@ public sealed class LinuxGameLauncher : IGameLauncher
             return overridePath;
 
         var candidates = new List<string>();
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        var steamRoots = new[]
-        {
-            Path.Combine(home, ".steam", "steam"),
-            Path.Combine(home, ".steam", "root"),
-            Path.Combine(home, ".local", "share", "Steam"),
-            Path.Combine(home, ".var", "app", "com.valvesoftware.Steam", "data", "Steam"),
-        };
-
-        foreach (var steamRoot in steamRoots.Where(Directory.Exists))
+        foreach (var steamRoot in SteamPaths.ExistingRoots())
         {
             // Custom / GE-Proton tools.
             CollectProtonScripts(Path.Combine(steamRoot, "compatibilitytools.d"), candidates);
