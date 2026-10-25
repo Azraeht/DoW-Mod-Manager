@@ -9,7 +9,7 @@ on:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_NOLOGO: 1
-  PROJECT: "DoW Mod Manager/DowModManager.csproj"
+  PROJECT: "DoW Mod Manager.CrossPlatform/DowModManager.csproj"
   TEST_PROJECT: "tests/DowModManager.Tests/DowModManager.Tests.csproj"
 
 jobs:

@@ -122,7 +122,7 @@ route should run the launcher's own Wine build. Plain `wine` from PATH is only t
 3. **P3 – discovery sources**: split the Steam locator into a source. Add Heroic and Lutris with fixture tests.
 4. **P4 – DE polish**: verify the DE mod list section, DE launch flags and `Local.ini` keys on a real install.
 5. **Ongoing – upstream sync**: rebase on `upstream/master` per upstream release, bump `VersionPrefix`,
-   reset the suffix to `linux.1`, and port new `Legacy/` behaviour (diff `Legacy/` after the rebase).
+   reset the suffix to `linux.1`, and port new upstream behaviour (diff `DoW Mod Manager/` between the old and new base).
 
 ## Open decisions
 

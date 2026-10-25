@@ -1,15 +1,15 @@
 # Linux port — Windows-bound code audit
 
 Baseline: upstream **IgorTheLight/DoW-Mod-Manager `master` @ `a5a9b2f` (v2.7.0.1)**, whose
-WinForms sources live unchanged under `DoW Mod Manager/Legacy/` on this branch (reference only,
-never compiled). Line numbers refer to those `Legacy/` files. The "Port" column says where the
-.NET 8 + Avalonia port (`DoW Mod Manager/DowModManager.csproj`) stands today.
+WinForms sources live unchanged in `DoW Mod Manager/` (reference only, never compiled into the
+port). Line numbers refer to those files. The "Port" column says where the .NET 8 + Avalonia port
+(`DoW Mod Manager.CrossPlatform/DowModManager.csproj`) stands today.
 
 ## 1. Project, framework, UI
 
 | | Upstream 2.7.0.1 | Port |
 |---|---|---|
-| Project | `DoW Mod Manager.csproj` (old-style, `Legacy/DoW_Mod_Manager.legacy.csproj` here) | `DowModManager.csproj` (SDK-style) |
+| Project | `DoW Mod Manager/DoW Mod Manager.csproj` (old-style) | `DoW Mod Manager.CrossPlatform/DowModManager.csproj` (SDK-style) |
 | Target framework | **.NET Framework 4.8** (`TargetFrameworkVersion v4.8`), Windows-only | `net8.0` everywhere, plus `net8.0-windows` when built on Windows |
 | UI | **WinForms** (`System.Windows.Forms`, `*.Designer.cs` + `*.resx`) | **Avalonia 11.2** + CommunityToolkit.Mvvm |
 | Assembly name | `DoW Mod Manager v2.7.0.1` (version is in the .exe name) | `DowModManager` |
@@ -18,7 +18,7 @@ never compiled). Line numbers refer to those `Legacy/` files. The "Port" column 
 
 ## 2. P/Invoke (`DllImport`)
 
-| Legacy location | DLL / functions | Purpose | Port |
+| Upstream location | DLL / functions | Purpose | Port |
 |---|---|---|---|
 | `FogRemover.cs:43-56` | kernel32 `OpenProcess`, `ReadProcessMemory`, `WriteProcessMemory`, `VirtualProtectEx`, `CloseHandle` | Soulstorm "no fog": patches the running game's memory | `Platform/Windows/WindowsFogRemover.cs` only. **Linux: not available**. The game runs inside Wine, so this would need a helper `.exe` run in the same prefix (see the plan). |
 | `WinApiCalls.cs:41-45` | ntdll `NtQueryTimerResolution`, `NtSetTimerResolution` | 0.5 ms system timer resolution | `Platform/Windows/WindowsPerformanceService.cs:247-250`; Linux no-op |
@@ -46,7 +46,7 @@ registry (`user.reg`), but this is not planned.
 
 ## 4. Hard-coded Windows paths and assumptions
 
-| Legacy location | What | Port |
+| Upstream location | What | Port |
 |---|---|---|
 | everywhere (`File.Exists("dxvk.conf")`, `"d3d9.dll"`, …) | Relative paths: the cwd **must** be the game folder | absolute paths from `GameInstall.InstallDir` |
 | `ModManagerForm.cs:413-427` | `%WINDIR%\Microsoft.NET\Framework\v4.0.30319\ngen.exe` (AOT/NGEN toggle) | dropped (no NGEN on .NET 8) |

@@ -26,8 +26,8 @@
         <TextBlock TextWrapping="Wrap"
                    Text="Manage, merge and launch Dawn of War mods (Original, Winter Assault, Dark Crusade, Soulstorm, Definitive Edition)." />
 
-        <TextBlock TextWrapping="Wrap" Opacity="0.8"
-                   Text="{Binding UpstreamBase, StringFormat='Linux port based on IgorTheLight/DoW-Mod-Manager {0}.'}" />
+        <TextBlock TextWrapping="Wrap" Opacity="0.8" IsVisible="{Binding IsFork}"
+                   Text="{Binding UpstreamBase, StringFormat='Based on IgorTheLight/DoW-Mod-Manager {0}.'}" />
 
         <TextBlock Text="Credits" FontWeight="SemiBold" Margin="0,6,0,0" />
         <TextBlock TextWrapping="Wrap" Opacity="0.8"
@@ -35,10 +35,10 @@
 
         <WrapPanel>
             <Button Content="Project page" Margin="0,0,8,8"
-                    Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static vm:AboutViewModel.HomePageUrl}" />
+                    Command="{Binding OpenUrlCommand}" CommandParameter="{Binding HomePageUrl}" />
             <Button Content="Check for updates" Margin="0,0,8,8"
-                    Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static vm:AboutViewModel.ReleasesUrl}" />
-            <Button Content="Original project" Margin="0,0,8,8"
+                    Command="{Binding OpenUrlCommand}" CommandParameter="{Binding ReleasesUrl}" />
+            <Button Content="Original project" Margin="0,0,8,8" IsVisible="{Binding IsFork}"
                     Command="{Binding OpenUrlCommand}" CommandParameter="{x:Static vm:AboutViewModel.OriginalProjectUrl}" />
         </WrapPanel>
 

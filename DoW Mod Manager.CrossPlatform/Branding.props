@@ -1,0 +1,11 @@
+<Project>
+  <!-- Fork-specific values, kept in this one file so the branch proposed to
+       IgorTheLight/DoW-Mod-Manager only has to change it: there VersionSuffix is
+       empty and DmmHomePageUrl is the upstream repository. -->
+  <PropertyGroup>
+    <!-- Port release counter on top of the upstream base version (VersionPrefix). -->
+    <VersionSuffix>linux.1</VersionSuffix>
+    <!-- Project page; "Check for updates" opens its /releases. -->
+    <DmmHomePageUrl>https://github.com/Azraeht/DoW-Mod-Manager</DmmHomePageUrl>
+  </PropertyGroup>
+</Project>

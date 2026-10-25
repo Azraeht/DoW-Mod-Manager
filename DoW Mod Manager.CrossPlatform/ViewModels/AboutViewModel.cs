@@ -11,9 +11,17 @@ namespace DoW_Mod_Manager.ViewModels;
 /// </summary>
 public partial class AboutViewModel : ViewModelBase
 {
-    public const string HomePageUrl = "https://github.com/Azraeht/DoW-Mod-Manager";
-    public const string ReleasesUrl = HomePageUrl + "/releases";
     public const string OriginalProjectUrl = "https://github.com/IgorTheLight/DoW-Mod-Manager";
+
+    /// <summary>Project page, from <c>DmmHomePageUrl</c> in Branding.props.</summary>
+    public string HomePageUrl { get; } =
+        Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "HomePageUrl")?.Value ?? OriginalProjectUrl;
+
+    public string ReleasesUrl => HomePageUrl.TrimEnd('/') + "/releases";
+
+    /// <summary>True in a fork: the About window then credits the upstream project it is based on.</summary>
+    public bool IsFork => !string.Equals(HomePageUrl.TrimEnd('/'), OriginalProjectUrl, StringComparison.OrdinalIgnoreCase);
 
     private readonly IDialogService _dialogs;
 
@@ -22,7 +30,7 @@ public partial class AboutViewModel : ViewModelBase
         ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
         ?? "?";
 
-    /// <summary>The upstream release this port is built on: the version without its "-linux.N" suffix.</summary>
+    /// <summary>The upstream release a fork is built on: the version without its "-linux.N" suffix.</summary>
     public string UpstreamBase => Version.Split('-')[0];
 
     public string Platform { get; }

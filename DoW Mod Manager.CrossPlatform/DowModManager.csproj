@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="Branding.props" />
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <!-- Linux/macOS dev builds target net8.0 only; Windows & CI also build the
@@ -11,13 +13,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>DoW_Mod_Manager</RootNamespace>
     <AssemblyName>DowModManager</AssemblyName>
-    <ApplicationIcon>MODenizer.ico</ApplicationIcon>
-    <!-- Port version = upstream IgorTheLight/DoW-Mod-Manager base version + "-linux.N".
-         Bump VersionPrefix when rebasing onto a new upstream release (and reset N to 1);
-         bump VersionSuffix for port-only releases. AssemblyVersion/FileVersion stay numeric
-         (the upstream base); the full string is the InformationalVersion shown in About. -->
+    <ApplicationIcon>Assets\app-icon.ico</ApplicationIcon>
+    <!-- Version = the IgorTheLight/DoW-Mod-Manager release this is based on, plus the
+         VersionSuffix from Branding.props ("-linux.N" in the fork). Bump VersionPrefix when
+         rebasing onto a new upstream release. AssemblyVersion/FileVersion stay numeric; the
+         full string is the InformationalVersion shown in About. -->
     <VersionPrefix>2.7.0.1</VersionPrefix>
-    <VersionSuffix>linux.1</VersionSuffix>
+    <DmmHomePageUrl Condition="'$(DmmHomePageUrl)' == ''">https://github.com/IgorTheLight/DoW-Mod-Manager</DmmHomePageUrl>
     <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
     <FileVersion>$(VersionPrefix)</FileVersion>
     <!-- Avalonia: keep the compiled XAML name generator happy -->
@@ -28,12 +30,8 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
-  <!-- Legacy WinForms sources are kept for reference only, never compiled. -->
   <ItemGroup>
-    <Compile Remove="Legacy\**\*.cs" />
-    <EmbeddedResource Remove="Legacy\**\*.resx" />
-    <AvaloniaResource Remove="Legacy\**" />
-    <None Remove="Legacy\**" />
+    <AssemblyMetadata Include="HomePageUrl" Value="$(DmmHomePageUrl)" />
   </ItemGroup>
 
   <!-- Windows-only platform implementation compiles solely under net8.0-windows. -->

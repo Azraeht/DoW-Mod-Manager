@@ -5,9 +5,32 @@ This document records the **frozen contracts** for the .NET 8 + Avalonia port
 the interfaces in `Abstractions/` and the models in `Models/` **do not change** without a
 discussion on issue #2. Every other workstream codes against them.
 
+## Repository layout
+
+The port sits **next to** the upstream WinForms manager, which is kept exactly as in
+IgorTheLight/DoW-Mod-Manager `master`:
+
+```
+DoW Mod Manager.sln              upstream solution (.NET Framework 4.8 WinForms app)
+DoW Mod Manager/                 upstream app, untouched: its sources, DXVK/, dgVoodoo2/, FONT/,
+                                 CAMERA/, ModList/, LatestStable/ (the port downloads these
+                                 folders from upstream at run time)
+DowModManager.sln                the port + its tests
+DoW Mod Manager.CrossPlatform/   the port (.NET 8 + Avalonia)
+tests/  packaging/  docs/  .github/
+```
+
+Never edit `DoW Mod Manager/` in this repository: upstream changes arrive there through a
+rebase, and the WinForms code is the behavioural reference for the port (read it, port it,
+do not compile it into the port). After each rebase, `git diff <old-base> <new-base> -- "DoW Mod Manager"`
+lists what the port has to follow.
+
+Fork-only values (version suffix, project URL) live in
+`DoW Mod Manager.CrossPlatform/Branding.props`, so a branch proposed upstream only changes that file.
+
 ## Project layout
 
-Single multi-targeted project `DoW Mod Manager/DowModManager.csproj`:
+Single multi-targeted project `DoW Mod Manager.CrossPlatform/DowModManager.csproj`:
 
 - `net8.0` — built everywhere (Linux dev + CI).
 - `net8.0-windows` — added automatically on Windows / CI; the **only** TFM that compiles
@@ -15,7 +38,7 @@ Single multi-targeted project `DoW Mod Manager/DowModManager.csproj`:
   compile constant or `[SupportedOSPlatform("windows")]`.
 
 ```
-DoW Mod Manager/
+DoW Mod Manager.CrossPlatform/
   Abstractions/      IPlatformService + sub-interfaces        (WS0, frozen)
   Models/            GameInstall, LaunchOptions, ModInfo, ...  (WS0, frozen)
   Platform/
@@ -27,7 +50,7 @@ DoW Mod Manager/
   Views/             WS4 (shell/shared) + WS5 (feature windows)
   Styles/ Assets/    WS4 — theme, icons
   Composition/       ServiceConfiguration — the single DI root
-  Legacy/            original WinForms code, reference only (NOT compiled)
+  Branding.props     fork-only version suffix / project URL
 ```
 
 ## Composition root
@@ -101,8 +124,10 @@ via constructor injection and stay UI-framework-agnostic (no Avalonia types in V
 
 ```bash
 export PATH="$HOME/.dotnet:$PATH"
-dotnet build  "DoW Mod Manager/DowModManager.csproj"
-dotnet run    --project "DoW Mod Manager/DowModManager.csproj" --framework net8.0
+dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj"
+dotnet run    --project "DoW Mod Manager.CrossPlatform/DowModManager.csproj" --framework net8.0
+# Windows target, compiled (not run) from Linux:
+dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -p:TargetFrameworks=net8.0-windows -p:EnableWindowsTargeting=true
 ```
 
 ## Feature windows (WS5)
