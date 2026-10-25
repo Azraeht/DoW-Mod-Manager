@@ -2,13 +2,14 @@ using System.IO;
 
 namespace DoW_Mod_Manager.Models;
 
-/// <summary>The four supported Dawn of War standalone variants.</summary>
+/// <summary>The supported Dawn of War variants.</summary>
 public enum GameVariant
 {
-    Original,        // W40k.exe
-    WinterAssault,   // W40kWA.exe
-    DarkCrusade,     // DarkCrusade.exe
-    Soulstorm        // Soulstorm.exe
+    Original,          // W40k.exe
+    WinterAssault,     // W40kWA.exe
+    DarkCrusade,       // DarkCrusade.exe
+    Soulstorm,         // Soulstorm.exe
+    DefinitiveEdition  // W40k.exe (64-bit) next to DoWDE.module
 }
 
 /// <summary>How the game was distributed — affects LAA patching and Proton appids.</summary>
@@ -49,11 +50,23 @@ public sealed class GameInstall
 
     public string ExecutablePath => Path.Combine(InstallDir, ExecutableName);
 
-    /// <summary>Winter Assault and the Original game have no "Playable" flag in *.module files.</summary>
+    /// <summary>
+    /// Winter Assault and the Original game have no "Playable" flag in *.module files. The
+    /// Definitive Edition also ships a W40k.exe, but its modules do carry the flag.
+    /// </summary>
     public bool IsOldGame => Variant is GameVariant.Original or GameVariant.WinterAssault;
 
     /// <summary>Only Soulstorm supports the in-memory fog removal hack.</summary>
     public bool SupportsNoFog => Variant == GameVariant.Soulstorm;
+
+    /// <summary>The Definitive Edition executable is 64-bit (Large-Address-Aware is meaningless).</summary>
+    public bool Is64Bit => Variant == GameVariant.DefinitiveEdition;
+
+    /// <summary>
+    /// Module launched by "start base game": the Definitive Edition boots its own DoWDE module,
+    /// the classic games W40k.
+    /// </summary>
+    public string BaseGameModuleName => Variant == GameVariant.DefinitiveEdition ? "DoWDE" : "W40k";
 
     public override string ToString() => $"{Variant} ({Distribution}) @ {InstallDir}";
 }

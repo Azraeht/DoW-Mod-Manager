@@ -67,7 +67,8 @@ namespace DoW_Mod_Manager.Services
         {
             string tag = variant switch
             {
-                GameVariant.Soulstorm => "[SS]",
+                // The mod list files Definitive Edition releases under the Soulstorm section.
+                GameVariant.Soulstorm or GameVariant.DefinitiveEdition => "[SS]",
                 GameVariant.DarkCrusade => "[DC]",
                 GameVariant.WinterAssault => "[WA]",
                 _ => "[OR]",

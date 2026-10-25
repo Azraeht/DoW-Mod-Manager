@@ -9,12 +9,6 @@ namespace DoW_Mod_Manager.Services
     /// </summary>
     public sealed class ModService : IModService
     {
-        /// <summary>The base modules that are never listed as playable mods.</summary>
-        private static readonly HashSet<string> BaseModules = new(StringComparer.Ordinal)
-        {
-            "W40k", "WXP", "DXP2"
-        };
-
         private readonly IModuleParser _parser;
 
         public ModService(IModuleParser parser)
@@ -42,7 +36,7 @@ namespace DoW_Mod_Manager.Services
 
                 string fileName = Path.GetFileNameWithoutExtension(filePath);
 
-                // There is no point adding base modules to the list.
+                // There is no point adding base modules (W40k, ..., DoWDE) to the list.
                 if (BaseModules.Contains(fileName))
                     continue;
 

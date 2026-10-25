@@ -16,12 +16,6 @@ namespace DoW_Mod_Manager.Platform.Windows;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsGameInstallLocator : IGameInstallLocator
 {
-    // Executable file names, matching the legacy GameExecutable constants.
-    const string ORIGINAL = "W40k.exe";
-    const string WINTER_ASSAULT = "W40kWA.exe";
-    const string DARK_CRUSADE = "DarkCrusade.exe";
-    const string SOULSTORM = "Soulstorm.exe";
-
     public GameInstall? IdentifyInstall(string directory)
     {
         if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
@@ -29,19 +23,13 @@ public sealed class WindowsGameInstallLocator : IGameInstallLocator
 
         // Priority order mirrors GetCurrentGameEXE(): a folder with both Original and Winter
         // Assault resolves to Winter Assault, and a full Soulstorm install resolves to Soulstorm.
-        if (File.Exists(Path.Combine(directory, SOULSTORM)))
-            return Build(directory, SOULSTORM, GameVariant.Soulstorm);
+        // A Definitive Edition folder (W40k.exe + DoWDE.module) is recognised before the Original.
+        // Shared with the Linux locator so both platforms agree.
+        GameVariant? variant = GameVariantDetector.Detect(directory);
+        if (variant is null)
+            return null;
 
-        if (File.Exists(Path.Combine(directory, DARK_CRUSADE)))
-            return Build(directory, DARK_CRUSADE, GameVariant.DarkCrusade);
-
-        if (File.Exists(Path.Combine(directory, WINTER_ASSAULT)))
-            return Build(directory, WINTER_ASSAULT, GameVariant.WinterAssault);
-
-        if (File.Exists(Path.Combine(directory, ORIGINAL)))
-            return Build(directory, ORIGINAL, GameVariant.Original);
-
-        return null;
+        return Build(directory, GameVariantDetector.ExecutableFor(variant.Value), variant.Value);
     }
 
     /// <summary>

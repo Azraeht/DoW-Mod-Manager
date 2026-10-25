@@ -55,6 +55,7 @@ public partial class ModDownloaderViewModel : ViewModelBase
 
         Header = "Popular mods for " + install.Variant switch
         {
+            GameVariant.DefinitiveEdition => "Definitive Edition:",
             GameVariant.Soulstorm => "Soulstorm:",
             GameVariant.DarkCrusade => "Dark Crusade:",
             GameVariant.WinterAssault => "Winter Assault:",

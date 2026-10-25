@@ -252,7 +252,7 @@ public partial class ModManagerViewModel : ViewModelBase
     private Task StartModAsync() => LaunchAsync(SelectedMod!.Name);
 
     [RelayCommand(CanExecute = nameof(CanStartBaseGame))]
-    private Task StartBaseGameAsync() => LaunchAsync("W40k");
+    private Task StartBaseGameAsync() => LaunchAsync(SelectedInstall!.BaseGameModuleName);
 
     private async Task LaunchAsync(string modName)
     {
@@ -431,7 +431,7 @@ public partial class ModManagerViewModel : ViewModelBase
             return;
 
         string name = SelectedRequiredMod.RequiredModName.Replace(".module", "").Trim();
-        if (name is "DXP2" or "WXP" or "W40k")
+        if (BaseModules.Contains(name))
         {
             await _dialogs.ShowMessageAsync("You are missing one of the base modules! Reinstall the game to fix it.", "Warning!");
             return;

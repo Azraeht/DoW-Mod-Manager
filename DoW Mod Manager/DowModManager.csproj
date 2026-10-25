@@ -38,6 +38,11 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <!-- Internal test seams (e.g. the Steam root list of the Linux locator). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="DowModManager.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.3" />
     <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />

@@ -10,8 +10,6 @@ namespace DoW_Mod_Manager.Services
     /// </summary>
     public sealed partial class ModMergerService : IModMergerService
     {
-        private static readonly string[] BaseModuleNames = ["W40k", "WXP", "DXP2"];
-
         private readonly IModService _mods;
 
         public ModMergerService(IModService mods)
@@ -172,8 +170,7 @@ namespace DoW_Mod_Manager.Services
                 .ToList();
         }
 
-        private static bool IsBaseModule(string name) =>
-            BaseModuleNames.Contains(name, StringComparer.OrdinalIgnoreCase);
+        private static bool IsBaseModule(string name) => BaseModules.Contains(name);
 
         private static string MergedPathFor(string installDir, string moduleName) =>
             Path.Combine(installDir, moduleName + IModMergerService.MergePostfix + ".module");
