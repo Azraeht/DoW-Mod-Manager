@@ -234,7 +234,7 @@ namespace DowModManager.Tests
             var library = Path.Combine(_steam, "library2");
             Directory.CreateDirectory(Path.Combine(_steam, "steamapps"));
             File.WriteAllText(Path.Combine(_steam, "steamapps", "libraryfolders.vdf"),
-                $"\"libraryfolders\"\n{{\n\t\"1\"\n\t{{\n\t\t\"path\"\t\t\"{library}\"\n\t}}\n}}\n");
+                $"\"libraryfolders\"\n{{\n\t\"1\"\n\t{{\n\t\t\"path\"\t\t\"{library.Replace("\\", "\\\\")}\"\n\t}}\n}}\n");
             var entryPoint = Runtime(library, "SteamLinuxRuntime_sniper");
 
             Assert.Equal(entryPoint, ProtonToolResolver.FindRuntimeEntryPoint(1628350, [_steam]));

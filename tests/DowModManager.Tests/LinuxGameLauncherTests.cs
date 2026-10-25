@@ -309,8 +309,8 @@ namespace DowModManager.Tests
             Assert.Equal(["--verb=waitforexitandrun", "--", "/p/proton", "waitforexitandrun", "/dl/Setup.exe"],
                          plan.StartInfo.ArgumentList);
             Assert.Equal("/steam/steamapps/compatdata/9450", plan.StartInfo.Environment["STEAM_COMPAT_DATA_PATH"]);
-            Assert.Equal("/p:/steam/steamapps/common/SteamLinuxRuntime_sniper", plan.StartInfo.Environment["STEAM_COMPAT_TOOL_PATHS"]);
-            Assert.Equal("/dl:/steam/steamapps/compatdata/9450", plan.StartInfo.Environment["STEAM_COMPAT_MOUNTS"]);
+            Assert.Equal($"{Path.GetDirectoryName("/p/proton")}:{Path.GetDirectoryName(Sniper)}", plan.StartInfo.Environment["STEAM_COMPAT_TOOL_PATHS"]);
+            Assert.Equal($"{Path.GetDirectoryName("/dl/Setup.exe")}:/steam/steamapps/compatdata/9450", plan.StartInfo.Environment["STEAM_COMPAT_MOUNTS"]);
             Assert.Equal(SteamGame().InstallDir, plan.StartInfo.Environment["STEAM_COMPAT_INSTALL_PATH"]);
             Assert.Contains(Sniper, plan.Description);
         }
@@ -359,6 +359,8 @@ namespace DowModManager.Tests
         [Fact]
         public void PrefixRun_SnapSteam_GivesProtonTheSnapHome()
         {
+            if (OperatingSystem.IsWindows())
+                return; // Linux paths; Windows has no HOME
             var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(SnapSteamGame(), "/dl/Setup.exe",
                 Host(files: [SnapHome + "/.steam/sdk64/steamclient.so"], installedProton: "/p/proton"), out _);
 
@@ -370,6 +372,8 @@ namespace DowModManager.Tests
         [Fact]
         public void PrefixRun_SteamBridgeInOwnHome_KeepsHome()
         {
+            if (OperatingSystem.IsWindows())
+                return; // Linux paths; Windows has no HOME
             var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(SnapSteamGame(), "/dl/Setup.exe",
                 Host(files: [SnapHome + "/.steam/sdk64/steamclient.so", Home + "/.steam/sdk64/steamclient.so"],
                      installedProton: "/p/proton"), out _);
