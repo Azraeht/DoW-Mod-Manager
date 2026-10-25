@@ -80,10 +80,14 @@ settings window edits that `Local.ini`, keeping any setting it does not manage. 
 copying them, enter its folder in **Soulstorm folder** (shown for the Definitive Edition) and press
 **Apply**; leave it empty and apply to stop.
 
-Mod installers: most mods ship as Windows `Setup.exe` installers. Use **Run installer…** in the
-Mod Downloader to run one inside the game's Proton prefix, and point it at the game folder
-(shown as `Z:\...` in the installer). Archive releases can simply be extracted into the game
-folder.
+Installing mods: select a mod in the Mod Downloader and press **Install**. ModDB only serves
+downloads to browsers, so the manager opens the download in yours and watches your downloads
+folder (files you downloaded earlier are offered first). Then it runs the mod's installer inside
+the game's Proton prefix (point it at the game folder, shown as `Z:\...` and in the progress
+text), or extracts an archive release (.zip, .7z, .rar) into the game folder from the folder that
+holds its `.module` file. **Uninstall** runs the mod's uninstaller, or removes the files the
+manager extracted. Installs are recorded in `installed-mods.json` in the manager's data folder.
+For anything else, **Manual steps** keeps **Download only** and **Run installer…**.
 
 Not available on Linux: CPU affinity, in-memory fog removal, timer resolution and power plans
 (greyed out). The 4 GB patch is disabled for the 64-bit Definitive Edition executable, which

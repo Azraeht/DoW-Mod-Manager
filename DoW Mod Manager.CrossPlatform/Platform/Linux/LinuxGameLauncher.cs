@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using DoW_Mod_Manager.Abstractions;
@@ -188,39 +189,73 @@ public sealed class LinuxGameLauncher : IGameLauncher
     /// <summary>
     /// Runs a Windows program (e.g. a mod's Setup.exe) inside the game's prefix:
     /// Proton (in its Steam Linux Runtime) with STEAM_COMPAT_DATA_PATH pointing at the game's compatdata, or Wine
-    /// with the resolved WINEPREFIX. Does not wait for the program to finish.
+    /// with the resolved WINEPREFIX. Does not wait for the program to finish. Programs that Wine
+    /// would load at the wrong address run from a temporary copy (<see cref="FixedBaseWorkaround"/>),
+    /// deleted once the started process exits.
     /// </summary>
     public Task<GameLaunchResult> RunInGamePrefixAsync(GameInstall game, string exePath, CancellationToken ct = default)
     {
+        string? copy = null;
         try
         {
-            var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(game, exePath, _host, out var error);
+            copy = FixedBaseWorkaround.CreateCopy(exePath);
+            var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(game, copy ?? exePath, _host, out var error);
             if (plan is null)
+            {
+                DeleteQuietly(copy);
                 return Task.FromResult(new GameLaunchResult { Started = false, Detail = error });
+            }
 
             var process = _start(plan.StartInfo);
             if (process is null)
-                return Task.FromResult(new GameLaunchResult { Started = false, Detail = $"Process.Start returned null for: {plan.Description}" });
-
-            using (process)
             {
-                return Task.FromResult(new GameLaunchResult
-                {
-                    Started = true,
-                    ProcessId = SafeId(process),
-                    ProcessName = SafeProcessName(process),
-                    Detail = plan.Description
-                });
+                DeleteQuietly(copy);
+                return Task.FromResult(new GameLaunchResult { Started = false, Detail = $"Process.Start returned null for: {plan.Description}" });
             }
+
+            var result = new GameLaunchResult
+            {
+                Started = true,
+                ProcessId = SafeId(process),
+                ProcessName = SafeProcessName(process),
+                Detail = copy is null
+                    ? plan.Description
+                    : plan.Description + $" (run from {Path.GetFileName(copy)}, a copy without the ASLR flag that Wine mishandles for this program)"
+            };
+            if (copy is null)
+                process.Dispose();
+            else
+                _ = DeleteAfterExitAsync(process, copy);
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
+            DeleteQuietly(copy);
             return Task.FromResult(new GameLaunchResult
             {
                 Started = false,
                 Detail = $"Could not run the installer: {ex.GetType().Name}: {ex.Message}"
             });
         }
+    }
+
+    private static async Task DeleteAfterExitAsync(Process process, string file)
+    {
+        using (process)
+        {
+            try { await process.WaitForExitAsync(); }
+            catch (InvalidOperationException) { /* not ours any more: delete now */ }
+        }
+        DeleteQuietly(file);
+    }
+
+    private static void DeleteQuietly(string? file)
+    {
+        if (file is null)
+            return;
+        try { File.Delete(file); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 
     // ---- helpers ----------------------------------------------------------------------------
