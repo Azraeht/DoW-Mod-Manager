@@ -24,6 +24,7 @@ namespace DoW_Mod_Manager.Services
             services.AddSingleton<IModlistService, ModlistService>();
             services.AddSingleton<IGameExtrasService, GameExtrasService>();
             services.AddSingleton<IGraphicsModService, GraphicsModService>();
+            services.AddSingleton<IModInstallService, ModInstallService>();
 
             return services;
         }
