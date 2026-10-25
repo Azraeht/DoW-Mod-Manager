@@ -24,7 +24,10 @@
         </TextBlock>
 
         <TextBlock TextWrapping="Wrap"
-                   Text="Manage, merge and launch Dawn of War mods (Original, Winter Assault, Dark Crusade, Soulstorm)." />
+                   Text="Manage, merge and launch Dawn of War mods (Original, Winter Assault, Dark Crusade, Soulstorm, Definitive Edition)." />
+
+        <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                   Text="{Binding UpstreamBase, StringFormat='Linux port based on IgorTheLight/DoW-Mod-Manager {0}.'}" />
 
         <TextBlock Text="Credits" FontWeight="SemiBold" Margin="0,6,0,0" />
         <TextBlock TextWrapping="Wrap" Opacity="0.8"

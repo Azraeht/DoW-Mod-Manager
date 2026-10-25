@@ -14,6 +14,8 @@ namespace DoW_Mod_Manager.Services
         public const string NoPrecacheModels = "NoPrecacheModels";
         public const string RemoveMapFog = "RemoveMapFog";
         public const string DowOptimizations = "DowOptimizations";
+        // Kept so existing INI files round-trip; never acted on. The port has no self-updater:
+        // upstream's would replace it with the Windows .exe from IgorTheLight/LatestStable.
         public const string Autoupdate = "Autoupdate";
         public const string MultithreadedJIT = "MultithreadedJIT";
         public const string AOTCompilation = "AOTCompilation";

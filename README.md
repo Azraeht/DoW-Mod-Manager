@@ -1,6 +1,12 @@
 ![image](https://user-images.githubusercontent.com/19975052/147577379-4ab095f3-e91a-42f2-8cae-fbbb50658130.png)
 
-# DoW Mod Manager v2.7.0.1
+# DoW Mod Manager v2.7.0.1-linux.1
+
+> **Linux port.** This fork ports [IgorTheLight/DoW-Mod-Manager](https://github.com/IgorTheLight/DoW-Mod-Manager)
+> (itself a fork of [Fragjacker/DoW-Mod-Manager](https://github.com/Fragjacker/DoW-Mod-Manager)) to .NET 8 + Avalonia.
+> The version is the upstream base it is built on (`2.7.0.1`) plus a port release counter (`-linux.1`).
+> Releases of this port are published at <https://github.com/Azraeht/DoW-Mod-Manager/releases>;
+> the Windows `.exe` described in the Windows section below is upstream's build, not this port's.
 
 This application allows for an easy launch of mods and management of large collections of mods for Warhammer 40K Dawn of War series.
 
@@ -20,18 +26,19 @@ This application allows for an easy launch of mods and management of large colle
 
 ## INSTALLATION (Linux — native):
 
-Starting with v3.0 the Mod Manager runs **natively on Linux** (.NET 8 + Avalonia). It no
+This port (2.7.0.1-linux.x) runs the Mod Manager **natively on Linux** (.NET 8 + Avalonia). It no
 longer needs to sit inside the game folder, and you do **not** have to configure Wine
 yourself — the manager detects your Steam/Proton installation and launches the game
 through Proton (falling back to plain Wine). The game itself stays a Windows executable run
 under Proton; only the manager is native.
 
-1. Download the latest `DoW_Mod_Manager-x86_64.AppImage` from the Releases page.
+1. Download the latest `DoW_Mod_Manager-<version>-x86_64.AppImage` (e.g.
+   `DoW_Mod_Manager-2.7.0.1-linux.1-x86_64.AppImage`) from the Releases page.
 2. Make it executable and run it:
 
    ```bash
-   chmod +x DoW_Mod_Manager-x86_64.AppImage
-   ./DoW_Mod_Manager-x86_64.AppImage
+   chmod +x DoW_Mod_Manager-*-x86_64.AppImage
+   ./DoW_Mod_Manager-*-x86_64.AppImage
    ```
 
 3. The manager auto-discovers Dawn of War installs from your Steam libraries

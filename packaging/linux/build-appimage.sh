@@ -7,7 +7,8 @@
 #                  (must contain the `DowModManager` executable). Defaults to
 #                  artifacts/linux-x64.
 #
-# Produces: artifacts/DoW_Mod_Manager-x86_64.AppImage
+# Produces: artifacts/DoW_Mod_Manager-<version>-x86_64.AppImage, <version> being the
+# csproj VersionPrefix-VersionSuffix (e.g. 2.7.0.1-linux.1); override with VERSION=...
 #
 # Requires network access on first run to fetch appimagetool; runs it with
 # --appimage-extract-and-run so no FUSE is needed (CI-friendly).
@@ -19,6 +20,13 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 OUT_DIR="${REPO_ROOT}/artifacts"
 APPDIR="${OUT_DIR}/AppDir"
 BIN_NAME="DowModManager"
+CSPROJ="${REPO_ROOT}/DoW Mod Manager/DowModManager.csproj"
+if [ -z "${VERSION:-}" ]; then
+    PREFIX="$(sed -n 's:.*<VersionPrefix>\(.*\)</VersionPrefix>.*:\1:p' "${CSPROJ}")"
+    SUFFIX="$(sed -n 's:.*<VersionSuffix>\(.*\)</VersionSuffix>.*:\1:p' "${CSPROJ}")"
+    VERSION="${PREFIX}${SUFFIX:+-${SUFFIX}}"
+fi
+APPIMAGE="${OUT_DIR}/DoW_Mod_Manager-${VERSION}-x86_64.AppImage"
 
 if [ ! -x "${PUBLISH_DIR}/${BIN_NAME}" ]; then
     echo "error: ${PUBLISH_DIR}/${BIN_NAME} not found. Publish first:" >&2
@@ -58,6 +66,6 @@ if [ ! -f "${TOOL}" ]; then
 fi
 
 echo ">> Building AppImage"
-ARCH=x86_64 "${TOOL}" --appimage-extract-and-run "${APPDIR}" "${OUT_DIR}/DoW_Mod_Manager-x86_64.AppImage"
+ARCH=x86_64 "${TOOL}" --appimage-extract-and-run "${APPDIR}" "${APPIMAGE}"
 
-echo ">> Done: ${OUT_DIR}/DoW_Mod_Manager-x86_64.AppImage"
+echo ">> Done: ${APPIMAGE}"

@@ -22,6 +22,9 @@ public partial class AboutViewModel : ViewModelBase
         ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
         ?? "?";
 
+    /// <summary>The upstream release this port is built on: the version without its "-linux.N" suffix.</summary>
+    public string UpstreamBase => Version.Split('-')[0];
+
     public string Platform { get; }
 
     public AboutViewModel(IPlatformService platform, IDialogService dialogs)

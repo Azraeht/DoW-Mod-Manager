@@ -12,7 +12,14 @@
     <RootNamespace>DoW_Mod_Manager</RootNamespace>
     <AssemblyName>DowModManager</AssemblyName>
     <ApplicationIcon>MODenizer.ico</ApplicationIcon>
-    <Version>3.0.0</Version>
+    <!-- Port version = upstream IgorTheLight/DoW-Mod-Manager base version + "-linux.N".
+         Bump VersionPrefix when rebasing onto a new upstream release (and reset N to 1);
+         bump VersionSuffix for port-only releases. AssemblyVersion/FileVersion stay numeric
+         (the upstream base); the full string is the InformationalVersion shown in About. -->
+    <VersionPrefix>2.7.0.1</VersionPrefix>
+    <VersionSuffix>linux.1</VersionSuffix>
+    <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
+    <FileVersion>$(VersionPrefix)</FileVersion>
     <!-- Avalonia: keep the compiled XAML name generator happy -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
