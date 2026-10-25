@@ -15,7 +15,7 @@ namespace DoW_Mod_Manager.Services
             if (string.IsNullOrEmpty(directory))
                 throw new ArgumentException("Directory must be provided.", nameof(directory));
 
-            string logPath = Path.Combine(directory, WarningsLogFileName);
+            string logPath = GamePaths.Resolve(directory, WarningsLogFileName);
 
             var errors = new List<string>();
 

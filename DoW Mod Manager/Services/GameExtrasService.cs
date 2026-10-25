@@ -32,7 +32,7 @@ namespace DoW_Mod_Manager.Services
         public bool IsCameraInstalled(string installDir)
         {
             string dir = GamePaths.EngineData(installDir);
-            return CameraFiles.All(f => File.Exists(Path.Combine(dir, f)));
+            return CameraFiles.All(f => File.Exists(GamePaths.Resolve(dir, f)));
         }
 
         public async Task InstallCameraAsync(string installDir, CancellationToken ct = default)
@@ -46,7 +46,7 @@ namespace DoW_Mod_Manager.Services
         {
             string dir = GamePaths.EngineData(installDir);
             foreach (string file in CameraFiles)
-                File.Delete(Path.Combine(dir, file));
+                File.Delete(GamePaths.Resolve(dir, file));
         }
 
         public bool IsLargerFontsInstalled(string installDir)

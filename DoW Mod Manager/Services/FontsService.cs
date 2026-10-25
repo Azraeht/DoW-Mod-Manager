@@ -54,7 +54,7 @@ namespace DoW_Mod_Manager.Services
 
             foreach (var (file, description) in ManagedFonts)
             {
-                string path = Path.Combine(dir, file);
+                string path = GamePaths.Resolve(dir, file);
                 if (!File.Exists(path))
                 {
                     result.Add(new FontEntry(file, description, false, "", false, 0));
@@ -97,7 +97,7 @@ namespace DoW_Mod_Manager.Services
 
             foreach (FontEntry entry in entries)
             {
-                string path = Path.Combine(dir, entry.DowFontFile);
+                string path = GamePaths.Resolve(dir, entry.DowFontFile);
                 if (!entry.Exists || !File.Exists(path))
                     continue;
 
@@ -125,7 +125,7 @@ namespace DoW_Mod_Manager.Services
                     }
                 }
 
-                File.WriteAllLines(path, lines);
+                WindowsText.WriteAllLines(path, lines);
             }
         }
 

@@ -88,5 +88,27 @@ namespace DowModManager.Tests
         [InlineData("1360", "Default")]
         public void MapScreenWidth_UsesLegacyHeuristic(string width, string expected) =>
             Assert.Equal(expected, _service.MapScreenWidth(width));
+
+        [Fact]
+        public void Write_UsesCrlfLineEndings()
+        {
+            var gill = _service.Read(_dir, "800").Single(e => e.DowFontFile == "gillsans_11.fnt");
+
+            _service.Write(_dir, "800", [gill with { Size = 16 }]);
+
+            CrlfAssert.File(Path.Combine(_fontDir, "gillsans_11.fnt"));
+        }
+
+        [Fact]
+        public void ReadWrite_FindManagedFontWithDifferentCasing()
+        {
+            File.Move(Path.Combine(_fontDir, "gillsans_11.fnt"), Path.Combine(_fontDir, "GillSans_11.FNT"));
+
+            var gill = _service.Read(_dir, "800").Single(e => e.DowFontFile == "gillsans_11.fnt");
+            Assert.True(gill.Exists);
+
+            _service.Write(_dir, "800", [gill with { Size = 16 }]);
+            Assert.Contains("\tsize800\t\t= 16;", File.ReadAllText(Path.Combine(_fontDir, "GillSans_11.FNT")));
+        }
     }
 }

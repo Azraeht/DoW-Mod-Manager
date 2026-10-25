@@ -129,5 +129,15 @@ namespace DowModManager.Tests
 
             Assert.Equal(["B", "D", "A", "C"], sorted.Select(e => e.Name));
         }
+
+        [Fact]
+        public void Save_WritesCrlfLineEndings()
+        {
+            string path = WriteModule("MyMod", ModuleWithDeps); // LF-only source
+            var module = new MergeableModule { Name = "MyMod", FilePath = path };
+            var def = new MergeDefinition { BaseModules = ["W40k"], Entries = [new MergeEntry("ModA", MergeModState.Active)] };
+
+            CrlfAssert.File(_service.Save(module, def));
+        }
     }
 }

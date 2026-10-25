@@ -301,7 +301,7 @@ public partial class ModManagerViewModel : ViewModelBase
             return;
 
         var folder = SelectedMod is { ModFolder.Length: > 0 }
-            ? Path.Combine(SelectedInstall.InstallDir, SelectedMod.ModFolder)
+            ? GamePaths.Resolve(SelectedInstall.InstallDir, SelectedMod.ModFolder)
             : SelectedInstall.InstallDir;
 
         if (Directory.Exists(folder))

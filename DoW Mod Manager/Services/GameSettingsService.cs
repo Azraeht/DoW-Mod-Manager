@@ -183,7 +183,7 @@ namespace DoW_Mod_Manager.Services
         /// <inheritdoc />
         public void ReadPlayerConfig(string installDir, string profileName, GameSettings settings)
         {
-            string path = Path.Combine(GamePaths.Profiles(installDir), profileName, PlayerConfig);
+            string path = GamePaths.Resolve(GamePaths.Profiles(installDir), profileName, PlayerConfig);
             if (!File.Exists(path))
                 return;
 
@@ -217,7 +217,7 @@ namespace DoW_Mod_Manager.Services
             foreach (string key in LocalIniKeys)
                 sb.Append(key).Append('=').Append(settings[key]).AppendLine();
 
-            File.WriteAllText(GamePaths.LocalIni(installDir), sb.ToString());
+            WindowsText.WriteAllText(GamePaths.LocalIni(installDir), sb.ToString());
         }
 
         private static void WriteDriverConfig(string installDir, GameSettings settings)
@@ -230,7 +230,7 @@ namespace DoW_Mod_Manager.Services
                 // Only create the file inside an existing Drivers directory: a fresh install that
                 // never ran the game has no driver config yet and the game will generate it.
                 if (Directory.Exists(Path.GetDirectoryName(path)))
-                    File.WriteAllText(path, entry + Environment.NewLine);
+                    File.WriteAllText(path, entry + WindowsText.NewLine);
                 return;
             }
 
@@ -241,16 +241,16 @@ namespace DoW_Mod_Manager.Services
             else
                 lines.Add(entry);
 
-            File.WriteAllLines(path, lines);
+            WindowsText.WriteAllLines(path, lines);
         }
 
         private static void WritePlayerConfig(string installDir, GameSettings settings)
         {
-            string profileDir = Path.Combine(GamePaths.Profiles(installDir), settings[K.PlayerProfile]);
+            string profileDir = GamePaths.Resolve(GamePaths.Profiles(installDir), settings[K.PlayerProfile]);
             if (!Directory.Exists(profileDir))
                 return;
 
-            string path = Path.Combine(profileDir, PlayerConfig);
+            string path = GamePaths.Resolve(profileDir, PlayerConfig);
             if (File.Exists(path))
             {
                 string[] lines = File.ReadAllLines(path);
@@ -263,7 +263,7 @@ namespace DoW_Mod_Manager.Services
                     if (PlayerConfigKeys.Contains(key))
                         lines[i] = $"\t{key} = {settings[key]},";
                 }
-                File.WriteAllLines(path, lines);
+                WindowsText.WriteAllLines(path, lines);
                 return;
             }
 
@@ -282,7 +282,7 @@ namespace DoW_Mod_Manager.Services
               .AppendLine("\tforce_name = \"Blood Ravens\",")
               .AppendLine("\trace = \"space_marine_race\",")
               .AppendLine("}");
-            File.WriteAllText(path, sb.ToString());
+            WindowsText.WriteAllText(path, sb.ToString());
         }
 
         /// <inheritdoc />
@@ -320,12 +320,12 @@ namespace DoW_Mod_Manager.Services
 
         /// <inheritdoc />
         public void RenameProfile(string installDir, string profileName, string newPlayerName) =>
-            WritePlayerName(Path.Combine(GamePaths.Profiles(installDir), profileName), newPlayerName);
+            WritePlayerName(GamePaths.Resolve(GamePaths.Profiles(installDir), profileName), newPlayerName);
 
         /// <inheritdoc />
         public void DeleteProfile(string installDir, string profileName)
         {
-            string dir = Path.Combine(GamePaths.Profiles(installDir), profileName);
+            string dir = GamePaths.Resolve(GamePaths.Profiles(installDir), profileName);
             if (Directory.Exists(dir))
                 Directory.Delete(dir, recursive: true);
         }
@@ -388,7 +388,7 @@ namespace DoW_Mod_Manager.Services
         /// </summary>
         private static string ReadPlayerName(string profileDir)
         {
-            string path = Path.Combine(profileDir, NameDat);
+            string path = GamePaths.Resolve(profileDir, NameDat);
             if (!File.Exists(path))
                 return "Player";
 
@@ -404,6 +404,6 @@ namespace DoW_Mod_Manager.Services
         }
 
         private static void WritePlayerName(string profileDir, string playerName) =>
-            File.WriteAllText(Path.Combine(profileDir, NameDat), playerName, Encoding.Unicode);
+            File.WriteAllText(GamePaths.Resolve(profileDir, NameDat), playerName, Encoding.Unicode);
     }
 }

@@ -10,6 +10,8 @@ namespace DoW_Mod_Manager.Services
         /// <summary>
         /// Combines <paramref name="segments"/> onto <paramref name="root"/>, reusing the on-disk
         /// casing of every segment that already exists. Missing segments keep the given casing.
+        /// Segments may hold several components separated by <c>\</c> or <c>/</c> (values read
+        /// from <c>.module</c> files use Windows separators).
         /// </summary>
         public static string Resolve(string root, params string[] segments)
         {
@@ -18,20 +20,32 @@ namespace DoW_Mod_Manager.Services
 
             foreach (string segment in segments)
             {
-                string? match = null;
-                if (exists)
+                foreach (string part in segment.Split(Separators, StringSplitOptions.RemoveEmptyEntries))
                 {
-                    match = Directory.EnumerateFileSystemEntries(current)
-                        .Select(Path.GetFileName)
-                        .FirstOrDefault(n => string.Equals(n, segment, StringComparison.OrdinalIgnoreCase));
-                }
+                    string exact = Path.Combine(current, part);
+                    string? match = null;
 
-                current = Path.Combine(current, match ?? segment);
-                exists = match is not null && Directory.Exists(current);
+                    // Fast path (and the only path on Windows): the given casing already exists.
+                    if (exists && (File.Exists(exact) || Directory.Exists(exact)))
+                    {
+                        match = part;
+                    }
+                    else if (exists)
+                    {
+                        match = Directory.EnumerateFileSystemEntries(current)
+                            .Select(Path.GetFileName)
+                            .FirstOrDefault(n => string.Equals(n, part, StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    current = Path.Combine(current, match ?? part);
+                    exists = match is not null && Directory.Exists(current);
+                }
             }
 
             return current;
         }
+
+        private static readonly char[] Separators = ['\\', '/'];
 
         /// <summary><c>Local.ini</c>: the game's own video/audio/profile settings.</summary>
         public static string LocalIni(string installDir) => Resolve(installDir, "Local.ini");

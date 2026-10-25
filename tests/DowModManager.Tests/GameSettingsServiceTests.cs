@@ -179,5 +179,34 @@ namespace DowModManager.Tests
 
             Assert.Equal(("1", "16", "0"), (s[K.SoundLimitSamples], s[K.SoundNrChannels], s[K.SoundQuality]));
         }
+
+        [Fact]
+        public void Write_UsesCrlfLineEndingsForAllGameFiles()
+        {
+            ProfileDir("Profile1");
+            Directory.CreateDirectory(Path.Combine(_dir, "Drivers"));
+            string driver = Path.Combine(_dir, "Drivers", "spdx9_config.txt");
+            File.WriteAllText(driver, "something 1\nallowhwcursor 1\n");
+
+            _service.Write(_dir, _service.GetDefaults()); // creates playercfg.lua
+
+            CrlfAssert.File(Path.Combine(_dir, "Local.ini"));
+            CrlfAssert.File(driver);
+            string cfg = Path.Combine(_dir, "Profiles", "Profile1", "playercfg.lua");
+            CrlfAssert.File(cfg);
+
+            _service.Write(_dir, _service.GetDefaults()); // updates playercfg.lua in place
+            CrlfAssert.File(cfg);
+        }
+
+        [Fact]
+        public void Write_CreatesDriverConfigWithCrlf()
+        {
+            Directory.CreateDirectory(Path.Combine(_dir, "Drivers"));
+
+            _service.Write(_dir, _service.GetDefaults());
+
+            CrlfAssert.File(Path.Combine(_dir, "Drivers", "spdx9_config.txt"));
+        }
     }
 }

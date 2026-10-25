@@ -148,7 +148,8 @@ namespace DoW_Mod_Manager.Services
                 output.AddRange(requiredBlock);
 
             string target = module.MergedFilePath ?? MergedPathFor(Path.GetDirectoryName(module.FilePath)!, module.Name);
-            File.WriteAllLines(target, output);
+            // The game reads .module files with Windows line endings.
+            WindowsText.WriteAllLines(target, output);
             return target;
         }
 

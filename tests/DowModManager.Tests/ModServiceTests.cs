@@ -111,5 +111,33 @@ namespace DowModManager.Tests
             Assert.Equal(ModDependencyStatus.Missing, deps[0].ModFolder);
             Assert.False(deps[0].IsInstalled);
         }
+
+        [Fact]
+        public void ResolveDependencies_MatchesModuleAndFolderNamesCaseInsensitively()
+        {
+            // Windows-authored mods: names in .module files rarely match the on-disk casing.
+            WriteModule("DXP2", "ModFolder = dxp2data\n");
+            Directory.CreateDirectory(Path.Combine(_dir, "DXP2Data"));
+            WriteModule("Unification", "Playable = 1\nModFolder = unification\n");
+            Directory.CreateDirectory(Path.Combine(_dir, "Unification"));
+
+            var mod = new ModInfo { RequiredMods = new[] { "dxp2", "UNIFICATION.module" } };
+
+            IReadOnlyList<ModDependencyStatus> deps = _service.ResolveDependencies(_dir, mod);
+
+            Assert.Equal(["dxp2data", "unification"], deps.Select(d => d.ModFolder));
+            Assert.All(deps, d => Assert.True(d.IsInstalled));
+        }
+
+        [Fact]
+        public void ResolveDependencies_AcceptsBackslashesInModFolder()
+        {
+            WriteModule("Nested", "ModFolder = Mods\\Nested\n");
+            Directory.CreateDirectory(Path.Combine(_dir, "mods", "nested"));
+
+            var mod = new ModInfo { RequiredMods = new[] { "Nested" } };
+
+            Assert.True(_service.ResolveDependencies(_dir, mod)[0].IsInstalled);
+        }
     }
 }

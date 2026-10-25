@@ -142,7 +142,8 @@ namespace DoW_Mod_Manager.Services
                 SettingsKeys.DXVKUpdateCheck
             };
 
-            using var sw = new StreamWriter(File.Create(configPath));
+            // CRLF like the legacy writer: the file is shared with the Windows build.
+            using var sw = new StreamWriter(File.Create(configPath)) { NewLine = WindowsText.NewLine };
             for (int i = 0; i < orderedKeys.Length; i++)
             {
                 string key = orderedKeys[i];

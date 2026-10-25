@@ -70,7 +70,9 @@ namespace DoW_Mod_Manager.Services
                 // RequiredMod values may or may not carry the ".module" suffix; normalise it
                 // so the file lookup matches the legacy "<name>.module" behaviour.
                 string normalisedName = requiredModName.Replace(".module", "");
-                string moduleFilePath = Path.Combine(installDir, normalisedName + ".module");
+                // Mods are authored on Windows: "RequiredMod.1 = dxp2" must find "DXP2.module" on a
+                // case-sensitive file system too.
+                string moduleFilePath = GamePaths.Resolve(installDir, normalisedName + ".module");
 
                 string modFolder;
                 if (File.Exists(moduleFilePath))
@@ -86,7 +88,7 @@ namespace DoW_Mod_Manager.Services
                 // Mirror CheckforInstalledMods: the dependency is installed when the asset
                 // folder exists on disk. A MISSING folder name resolves to "<dir>/MISSING"
                 // which will not exist, so it is reported as not installed.
-                string folderPath = Path.Combine(installDir, modFolder);
+                string folderPath = GamePaths.Resolve(installDir, modFolder);
                 bool isInstalled = Directory.Exists(folderPath);
 
                 result.Add(new ModDependencyStatus

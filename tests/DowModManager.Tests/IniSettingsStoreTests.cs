@@ -116,5 +116,13 @@ namespace DowModManager.Tests
             Assert.Equal(5, read[SettingsKeys.ChoiceIndex]);
             Assert.Equal(defaults[SettingsKeys.AOTCompilation], read[SettingsKeys.AOTCompilation]);
         }
+
+        [Fact]
+        public void Write_UsesCrlfLineEndings()
+        {
+            _store.Write(_dir, _store.GetDefaults());
+
+            CrlfAssert.File(Path.Combine(_dir, IniSettingsStore.ConfigFileName));
+        }
     }
 }
