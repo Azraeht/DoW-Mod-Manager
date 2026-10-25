@@ -50,6 +50,34 @@ public sealed class WindowsGameLauncher : IGameLauncher
         });
     }
 
+    /// <summary>On Windows there is no prefix: the program is simply started from its own folder.</summary>
+    public Task<GameLaunchResult> RunInGamePrefixAsync(GameInstall game, string exePath, CancellationToken ct = default)
+    {
+        try
+        {
+            using var proc = Process.Start(new ProcessStartInfo
+            {
+                FileName = exePath,
+                WorkingDirectory = System.IO.Path.GetDirectoryName(exePath) ?? game.InstallDir,
+                UseShellExecute = true
+            });
+
+            return Task.FromResult(proc is null
+                ? new GameLaunchResult { Started = false, Detail = $"Could not start {exePath}" }
+                : new GameLaunchResult
+                {
+                    ProcessId = SafeProcessId(proc),
+                    ProcessName = System.IO.Path.GetFileNameWithoutExtension(exePath),
+                    Started = true,
+                    Detail = $"Started {exePath}"
+                });
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new GameLaunchResult { Started = false, Detail = $"Could not start {exePath}: {ex.Message}" });
+        }
+    }
+
     static int SafeProcessId(Process proc)
     {
         try { return proc.Id; }

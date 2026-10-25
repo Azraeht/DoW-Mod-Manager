@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,23 +10,65 @@ using DoW_Mod_Manager.Models;
 namespace DoW_Mod_Manager.Platform.Linux;
 
 /// <summary>
-/// Launches Dawn of War on Linux. Steam installs go through the Steam client
-/// (<c>steam -applaunch</c>) so the game runs with the Proton version and runtime container the
-/// user configured for it; otherwise Proton is invoked directly, with a plain Wine fallback.
-/// The legacy Windows post-launch tweaks (CPU affinity, in-memory fog removal) are Windows-only
-/// and become no-ops here; when requested but unsupported, that is noted in
-/// <see cref="GameLaunchResult.Detail"/>.
+/// Launches Dawn of War on Linux. Route order (see <see cref="LinuxLaunchPlanner"/>):
+/// <list type="number">
+/// <item><c>DOWMM_PROTON</c> set: Proton is run directly with that script.</item>
+/// <item>Steam installs with an appid go through the Steam client so the game runs with the
+/// Proton version and Steam Linux Runtime container the user configured: <c>steam -applaunch</c>
+/// (native, or snap via <c>/snap/bin/steam</c>), then
+/// <c>flatpak run com.valvesoftware.Steam -applaunch</c> (Flatpak Steam), then
+/// <c>xdg-open steam://run/&lt;appid&gt;//&lt;args&gt;/</c> when only a URL handler is registered.</item>
+/// <item>Otherwise the newest installed Proton is run directly (<c>proton run</c>).</item>
+/// <item>Last resort: plain Wine (GOG installs via Heroic/Lutris/Bottles, or plain wine).</item>
+/// </list>
+/// When Steam (or Proton) starts the game, the started process is not the game, so the launcher
+/// polls <c>/proc</c> (<see cref="IGameProcessFinder"/>) for the game exe and reports its pid.
+/// The legacy Windows post-launch tweaks (CPU affinity, in-memory fog removal) are Windows-only and
+/// become no-ops here; when requested that is noted in <see cref="GameLaunchResult.Detail"/>.
+/// <para>Environment overrides:</para>
+/// <list type="bullet">
+/// <item><c>DOWMM_PROTON</c>: full path to a <c>proton</c> script; bypasses Steam and forces the
+/// direct Proton route (also used by <see cref="RunInGamePrefixAsync"/>).</item>
+/// <item><c>DOWMM_WINE</c>: wine binary name or path for the Wine route (default: <c>wine</c> on PATH).</item>
+/// <item><c>DOWMM_WINEPREFIX</c>: WINEPREFIX for the Wine route; takes precedence over the Proton
+/// prefix and an inherited <c>WINEPREFIX</c>, and forces <see cref="RunInGamePrefixAsync"/> to use Wine.</item>
+/// <item><c>WINEPREFIX</c> (inherited, e.g. from Lutris/Bottles/Heroic): used by the Wine route when
+/// neither <c>DOWMM_WINEPREFIX</c> nor a Proton prefix applies; otherwise Wine's default <c>~/.wine</c>.</item>
+/// </list>
 /// </summary>
 public sealed class LinuxGameLauncher : IGameLauncher
 {
-    // Optional user overrides.
-    private const string ProtonOverrideEnv = "DOWMM_PROTON"; // full path to a `proton` script
-    private const string WineOverrideEnv = "DOWMM_WINE";     // wine binary name or path
+    private static readonly TimeSpan DefaultGameStartTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromMilliseconds(500);
 
-    public Task<GameLaunchResult> LaunchAsync(GameInstall game, LaunchOptions options, CancellationToken ct = default)
+    private readonly LinuxLaunchHost _host;
+    private readonly IGameProcessFinder _finder;
+    private readonly TimeSpan _gameStartTimeout;
+    private readonly TimeSpan _pollInterval;
+    private readonly Func<ProcessStartInfo, Process?> _start;
+
+    /// <param name="host">Environment probes (defaults to the real host).</param>
+    /// <param name="finder">Game process finder (defaults to <c>/proc</c>).</param>
+    /// <param name="gameStartTimeout">How long to wait for the game process to appear.</param>
+    /// <param name="pollInterval">Delay between two process scans.</param>
+    /// <param name="startProcess">Starts a process (defaults to <see cref="Process.Start(ProcessStartInfo)"/>).</param>
+    public LinuxGameLauncher(
+        LinuxLaunchHost? host = null,
+        IGameProcessFinder? finder = null,
+        TimeSpan? gameStartTimeout = null,
+        TimeSpan? pollInterval = null,
+        Func<ProcessStartInfo, Process?>? startProcess = null)
+    {
+        _host = host ?? new LinuxLaunchHost();
+        _finder = finder ?? new ProcGameProcessFinder();
+        _gameStartTimeout = gameStartTimeout ?? DefaultGameStartTimeout;
+        _pollInterval = pollInterval ?? DefaultPollInterval;
+        _start = startProcess ?? Process.Start;
+    }
+
+    public async Task<GameLaunchResult> LaunchAsync(GameInstall game, LaunchOptions options, CancellationToken ct = default)
     {
         var arguments = options.ToArgumentString();
-        var workingDir = Directory.Exists(game.InstallDir) ? game.InstallDir : Environment.CurrentDirectory;
 
         var unsupportedNotes = new List<string>();
         if (options.CpuAffinityOptimization)
@@ -38,308 +78,145 @@ public sealed class LinuxGameLauncher : IGameLauncher
 
         try
         {
-            var protonPath = ResolveProton();
-            var steamPath = FindOnPath("steam");
-            ProcessStartInfo psi;
-            string launchDescription;
+            var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(game, arguments, _host, out var error);
+            if (plan is null)
+                return new GameLaunchResult { Started = false, Detail = error };
 
-            // An explicit DOWMM_PROTON override always wins over going through Steam.
-            var protonOverridden = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ProtonOverrideEnv));
+            // Game instances that were already running must not be mistaken for the new one.
+            var preexisting = new HashSet<int>(_finder.FindProcesses(game.ExecutableName));
 
-            if (!protonOverridden && steamPath is not null
-                && game.Distribution == GameDistribution.Steam && game.SteamAppId is not null)
-            {
-                psi = BuildSteamStartInfo(game, steamPath, arguments, workingDir, out launchDescription);
-            }
-            else if (protonPath is not null)
-            {
-                psi = BuildProtonStartInfo(game, protonPath, arguments, workingDir, out launchDescription);
-            }
-            else
-            {
-                var winePath = ResolveWine();
-                if (winePath is null)
-                {
-                    return Task.FromResult(new GameLaunchResult
-                    {
-                        Started = false,
-                        Detail = "No Proton runtime found and no Wine binary available on PATH. "
-                               + $"Set {ProtonOverrideEnv} to a proton script or {WineOverrideEnv} to a wine binary."
-                    });
-                }
-
-                psi = BuildWineStartInfo(game, winePath, arguments, workingDir, out launchDescription);
-            }
-
-            var process = Process.Start(psi);
+            using var process = _start(plan.StartInfo);
             if (process is null)
-            {
-                return Task.FromResult(new GameLaunchResult
-                {
-                    Started = false,
-                    Detail = $"Process.Start returned null for: {launchDescription}"
-                });
-            }
+                return new GameLaunchResult { Started = false, Detail = $"Process.Start returned null for: {plan.Description}" };
 
-            var detail = new StringBuilder(launchDescription);
+            var detail = new StringBuilder(plan.Description);
             if (unsupportedNotes.Count > 0)
                 detail.Append(" | ").Append(string.Join("; ", unsupportedNotes));
 
-            return Task.FromResult(new GameLaunchResult
+            int? gamePid;
+            try
+            {
+                // The Steam client may exit at once (already running) or keep running (it was
+                // just started): neither says anything about the game, so only stop early on a
+                // failing direct Proton/Wine launch.
+                gamePid = await _finder.WaitForNewProcessAsync(
+                    game.ExecutableName, preexisting, _gameStartTimeout, _pollInterval,
+                    giveUp: plan.ViaSteam ? null : () => HasExited(process),
+                    ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return new GameLaunchResult
+                {
+                    Started = true,
+                    Detail = detail.Append(" | stopped waiting for the game process (cancelled)").ToString()
+                };
+            }
+
+            if (gamePid is { } pid)
+            {
+                return new GameLaunchResult
+                {
+                    Started = true,
+                    ProcessId = pid,
+                    ProcessName = game.ExecutableName,
+                    Detail = detail.ToString()
+                };
+            }
+
+            if (!plan.ViaSteam && HasExited(process) && SafeExitCode(process) is { } code and not 0)
+            {
+                return new GameLaunchResult
+                {
+                    Started = false,
+                    Detail = $"{plan.Route} exited with code {code} before {game.ExecutableName} appeared. {detail}"
+                };
+            }
+
+            detail.Append($" | the {game.ExecutableName} process could not be confirmed within "
+                        + $"{_gameStartTimeout.TotalSeconds:0} s");
+
+            // Direct Proton/Wine: the started process lives as long as the game, so it is a usable handle.
+            var trackLauncher = !plan.ViaSteam && !HasExited(process);
+            return new GameLaunchResult
             {
                 Started = true,
-                ProcessId = process.Id,
-                ProcessName = SafeProcessName(process),
+                ProcessId = trackLauncher ? SafeId(process) : 0,
+                ProcessName = trackLauncher ? SafeProcessName(process) : "",
                 Detail = detail.ToString()
-            });
+            };
+        }
+        catch (Exception ex)
+        {
+            return new GameLaunchResult
+            {
+                Started = false,
+                Detail = $"Launch failed: {ex.GetType().Name}: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Runs a Windows program (e.g. a mod's Setup.exe) inside the game's prefix:
+    /// <c>proton run</c> with STEAM_COMPAT_DATA_PATH pointing at the game's compatdata, or Wine
+    /// with the resolved WINEPREFIX. Does not wait for the program to finish.
+    /// </summary>
+    public Task<GameLaunchResult> RunInGamePrefixAsync(GameInstall game, string exePath, CancellationToken ct = default)
+    {
+        try
+        {
+            var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(game, exePath, _host, out var error);
+            if (plan is null)
+                return Task.FromResult(new GameLaunchResult { Started = false, Detail = error });
+
+            var process = _start(plan.StartInfo);
+            if (process is null)
+                return Task.FromResult(new GameLaunchResult { Started = false, Detail = $"Process.Start returned null for: {plan.Description}" });
+
+            using (process)
+            {
+                return Task.FromResult(new GameLaunchResult
+                {
+                    Started = true,
+                    ProcessId = SafeId(process),
+                    ProcessName = SafeProcessName(process),
+                    Detail = plan.Description
+                });
+            }
         }
         catch (Exception ex)
         {
             return Task.FromResult(new GameLaunchResult
             {
                 Started = false,
-                Detail = $"Launch failed: {ex.GetType().Name}: {ex.Message}"
+                Detail = $"Could not run the installer: {ex.GetType().Name}: {ex.Message}"
             });
         }
     }
 
-    // ---- Steam ------------------------------------------------------------------------------
-
-    /// <summary>
-    /// <c>steam -applaunch &lt;appid&gt; &lt;args&gt;</c>: Steam picks the per-game compat tool
-    /// (CompatToolMapping), wraps it in the Steam Linux Runtime and handles DRM. Invoking Proton
-    /// ourselves would pick an arbitrary version and could upgrade the game's prefix.
-    /// </summary>
-    private static ProcessStartInfo BuildSteamStartInfo(
-        GameInstall game, string steamPath, string arguments, string workingDir, out string description)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = steamPath,
-            WorkingDirectory = workingDir,
-            UseShellExecute = false
-        };
-        psi.ArgumentList.Add("-applaunch");
-        psi.ArgumentList.Add(game.SteamAppId!.Value.ToString());
-        foreach (var arg in SplitArguments(arguments))
-            psi.ArgumentList.Add(arg);
-
-        description = $"Steam: \"{steamPath}\" -applaunch {game.SteamAppId} {arguments}";
-        return psi;
-    }
-
-    // ---- Proton -----------------------------------------------------------------------------
-
-    private static ProcessStartInfo BuildProtonStartInfo(
-        GameInstall game, string protonPath, string arguments, string workingDir, out string description)
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        var compatData = !string.IsNullOrWhiteSpace(game.ProtonPrefix)
-            ? game.ProtonPrefix!
-            : Path.Combine(home, ".steam", "steam", "steamapps", "compatdata",
-                           (game.SteamAppId ?? 9450).ToString());
-
-        var clientInstall = !string.IsNullOrWhiteSpace(game.SteamRoot)
-            ? game.SteamRoot!
-            : Path.Combine(home, ".steam", "steam");
-
-        // `proton` is a Python script; invoking it directly works because it has a shebang and
-        // is executable. We pass: proton run <game.exe> <args...>
-        var psi = new ProcessStartInfo
-        {
-            FileName = protonPath,
-            WorkingDirectory = workingDir,
-            UseShellExecute = false
-        };
-        psi.ArgumentList.Add("run");
-        psi.ArgumentList.Add(game.ExecutablePath);
-        foreach (var arg in SplitArguments(arguments))
-            psi.ArgumentList.Add(arg);
-
-        psi.Environment["STEAM_COMPAT_DATA_PATH"] = compatData;
-        psi.Environment["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = clientInstall;
-
-        description = $"Proton: \"{protonPath}\" run \"{game.ExecutablePath}\" {arguments} "
-                    + $"[STEAM_COMPAT_DATA_PATH={compatData}, STEAM_COMPAT_CLIENT_INSTALL_PATH={clientInstall}]";
-        return psi;
-    }
-
-    /// <summary>
-    /// Resolves the Proton script: honours the <c>DOWMM_PROTON</c> override first, then scans
-    /// Steam's <c>compatibilitytools.d</c> and the bundled <c>common/Proton*</c> runtimes,
-    /// preferring the newest by version.
-    /// </summary>
-    private static string? ResolveProton()
-    {
-        var overridePath = Environment.GetEnvironmentVariable(ProtonOverrideEnv);
-        if (!string.IsNullOrWhiteSpace(overridePath) && File.Exists(overridePath))
-            return overridePath;
-
-        var candidates = new List<string>();
-
-        foreach (var steamRoot in SteamPaths.ExistingRoots())
-        {
-            // Custom / GE-Proton tools.
-            CollectProtonScripts(Path.Combine(steamRoot, "compatibilitytools.d"), candidates);
-            // Bundled Valve Proton runtimes.
-            CollectProtonScripts(Path.Combine(steamRoot, "steamapps", "common"), candidates);
-        }
-
-        if (candidates.Count == 0)
-            return null;
-
-        // Prefer the newest: sort by a parsed version descending, then by name descending so
-        // "GE-Proton9-x" / "Proton 9.0" win over older ones.
-        return candidates
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderByDescending(p => ProtonVersionKey(p))
-            .ThenByDescending(p => p, StringComparer.OrdinalIgnoreCase)
-            .First();
-    }
-
-    /// <summary>Finds <c>&lt;dir&gt;/Proton*/proton</c> scripts and adds them to <paramref name="into"/>.</summary>
-    private static void CollectProtonScripts(string dir, List<string> into)
-    {
-        if (!Directory.Exists(dir))
-            return;
-
-        IEnumerable<string> subDirs;
-        try { subDirs = Directory.EnumerateDirectories(dir, "*Proton*"); }
-        catch (IOException) { return; }
-        catch (UnauthorizedAccessException) { return; }
-
-        foreach (var sub in subDirs)
-        {
-            var script = Path.Combine(sub, "proton");
-            if (File.Exists(script))
-                into.Add(script);
-        }
-    }
-
-    /// <summary>Extracts a comparable numeric key from a Proton directory name (e.g. 9.07 -&gt; 9.07).</summary>
-    private static double ProtonVersionKey(string protonScriptPath)
-    {
-        var dirName = Path.GetFileName(Path.GetDirectoryName(protonScriptPath)) ?? "";
-        var digits = new StringBuilder();
-        var seenDot = false;
-        foreach (var c in dirName)
-        {
-            if (char.IsDigit(c)) digits.Append(c);
-            else if (c == '.' && !seenDot && digits.Length > 0) { digits.Append('.'); seenDot = true; }
-            else if (digits.Length > 0 && c != '.') break;
-        }
-
-        return double.TryParse(digits.ToString(),
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out var v) ? v : 0d;
-    }
-
-    // ---- Wine fallback ----------------------------------------------------------------------
-
-    private static ProcessStartInfo BuildWineStartInfo(
-        GameInstall game, string winePath, string arguments, string workingDir, out string description)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = winePath,
-            WorkingDirectory = workingDir,
-            UseShellExecute = false
-        };
-        psi.ArgumentList.Add(game.ExecutablePath);
-        foreach (var arg in SplitArguments(arguments))
-            psi.ArgumentList.Add(arg);
-
-        // Reuse the Proton prefix's pfx as a WINEPREFIX when available; this is where Proton
-        // keeps the actual Wine prefix (compatdata/<appid>/pfx).
-        string? winePrefix = null;
-        if (!string.IsNullOrWhiteSpace(game.ProtonPrefix))
-        {
-            var pfx = Path.Combine(game.ProtonPrefix!, "pfx");
-            winePrefix = Directory.Exists(pfx) ? pfx : game.ProtonPrefix;
-        }
-
-        if (winePrefix is not null)
-            psi.Environment["WINEPREFIX"] = winePrefix;
-
-        description = $"Wine: \"{winePath}\" \"{game.ExecutablePath}\" {arguments}"
-                    + (winePrefix is not null ? $" [WINEPREFIX={winePrefix}]" : " [default WINEPREFIX]");
-        return psi;
-    }
-
-    /// <summary>Resolves the wine binary: <c>DOWMM_WINE</c> override, else "wine" on PATH.</summary>
-    private static string? ResolveWine()
-    {
-        var overrideWine = Environment.GetEnvironmentVariable(WineOverrideEnv);
-        if (!string.IsNullOrWhiteSpace(overrideWine))
-        {
-            if (File.Exists(overrideWine))
-                return overrideWine;
-            var resolved = FindOnPath(overrideWine);
-            if (resolved is not null)
-                return resolved;
-        }
-
-        return FindOnPath("wine");
-    }
-
-    private static string? FindOnPath(string fileName)
-    {
-        var pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrEmpty(pathEnv))
-            return null;
-
-        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var candidate = Path.Combine(dir, fileName);
-            if (File.Exists(candidate))
-                return candidate;
-        }
-        return null;
-    }
-
     // ---- helpers ----------------------------------------------------------------------------
 
-    /// <summary>
-    /// Splits a command-line string into individual arguments, honouring double quotes. The
-    /// DoW argument string is simple (no embedded quotes), so this lightweight splitter is enough.
-    /// </summary>
-    private static IEnumerable<string> SplitArguments(string arguments)
+    private static bool HasExited(Process process)
     {
-        if (string.IsNullOrWhiteSpace(arguments))
-            yield break;
+        try { return process.HasExited; }
+        catch { return false; }
+    }
 
-        var current = new StringBuilder();
-        var inQuotes = false;
+    private static int? SafeExitCode(Process process)
+    {
+        try { return process.ExitCode; }
+        catch { return null; }
+    }
 
-        foreach (var c in arguments)
-        {
-            if (c == '"')
-            {
-                inQuotes = !inQuotes;
-            }
-            else if (char.IsWhiteSpace(c) && !inQuotes)
-            {
-                if (current.Length > 0)
-                {
-                    yield return current.ToString();
-                    current.Clear();
-                }
-            }
-            else
-            {
-                current.Append(c);
-            }
-        }
-
-        if (current.Length > 0)
-            yield return current.ToString();
+    private static int SafeId(Process process)
+    {
+        try { return process.Id; }
+        catch { return 0; }
     }
 
     private static string SafeProcessName(Process process)
     {
         try { return process.ProcessName; }
-        catch { return "proton"; }
+        catch { return ""; }
     }
 }

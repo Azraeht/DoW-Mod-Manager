@@ -24,6 +24,8 @@
                     ToolTip.Tip="Opens the download (and patch, if any) links in your browser" />
             <Button Content="Open mod page" Margin="0,0,8,8" Command="{Binding OpenModPageCommand}" />
             <Button Content="Browse ModDB" Margin="0,0,8,8" Command="{Binding OpenModDbCommand}" />
+            <Button Content="Run installer…" Margin="0,0,8,8" Command="{Binding RunInstallerCommand}"
+                    ToolTip.Tip="Runs a downloaded Windows installer (Setup.exe) for this game; on Linux it runs inside the game's Proton/Wine prefix" />
             <Button Content="CLOSE" Margin="0,0,8,8" Command="{Binding CloseCommand}" />
         </WrapPanel>
 

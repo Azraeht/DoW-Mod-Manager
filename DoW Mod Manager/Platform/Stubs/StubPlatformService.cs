@@ -26,6 +26,9 @@ internal sealed class StubGameLauncher : IGameLauncher
 {
     public Task<GameLaunchResult> LaunchAsync(GameInstall game, LaunchOptions options, CancellationToken ct = default)
         => Task.FromResult(new GameLaunchResult { Started = false, Detail = "No platform launcher wired (stub)." });
+
+    public Task<GameLaunchResult> RunInGamePrefixAsync(GameInstall game, string exePath, CancellationToken ct = default)
+        => Task.FromResult(new GameLaunchResult { Started = false, Detail = "No platform launcher wired (stub)." });
 }
 
 internal sealed class StubFileSystemService : IFileSystemService

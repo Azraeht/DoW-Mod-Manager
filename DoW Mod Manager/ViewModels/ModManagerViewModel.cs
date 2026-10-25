@@ -265,9 +265,18 @@ public partial class ModManagerViewModel : ViewModelBase
             SaveSettings(SelectedInstall);
             Status = $"Launching {modName}…";
             var result = await _launcher.LaunchAsync(SelectedInstall, BuildOptions(modName));
-            Status = result.Started
-                ? $"Started {modName} (pid {result.ProcessId}). {result.Detail}"
-                : $"Launch failed: {result.Detail}";
+            if (result.Started)
+            {
+                // ProcessId is 0 when the game was started through Steam and its pid could not be confirmed.
+                Status = result.ProcessId > 0
+                    ? $"Started {modName} (pid {result.ProcessId}). {result.Detail}"
+                    : $"Started {modName}. {result.Detail}";
+            }
+            else
+            {
+                Status = $"Launch failed: {result.Detail}";
+                await _dialogs.ShowMessageAsync($"Could not launch {modName}.\n\n{result.Detail}", "Launch failed");
+            }
         }
         catch (Exception ex)
         {

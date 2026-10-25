@@ -32,6 +32,13 @@ public interface IGameLauncher
     /// responsible for any post-launch tweaks it supports (CPU affinity, fog removal on Windows).
     /// </summary>
     Task<GameLaunchResult> LaunchAsync(GameInstall game, LaunchOptions options, CancellationToken ct = default);
+
+    /// <summary>
+    /// Runs a Windows program (e.g. a downloaded mod's Setup.exe) against <paramref name="game"/>:
+    /// started directly on Windows, inside the game's Proton/Wine prefix on Linux. Does not wait
+    /// for the program to exit.
+    /// </summary>
+    Task<GameLaunchResult> RunInGamePrefixAsync(GameInstall game, string exePath, CancellationToken ct = default);
 }
 
 /// <summary>Folder/shortcut/file-properties operations that differ per OS.</summary>

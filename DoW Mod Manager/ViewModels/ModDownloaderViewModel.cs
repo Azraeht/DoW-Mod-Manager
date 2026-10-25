@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DoW_Mod_Manager.Abstractions;
 using DoW_Mod_Manager.Models;
 using DoW_Mod_Manager.Services;
 
@@ -20,6 +21,8 @@ public partial class ModDownloaderViewModel : ViewModelBase
 
     private readonly IModlistService _modlist;
     private readonly IDialogService _dialogs;
+    private readonly IGameLauncher _launcher;
+    private readonly GameInstall _install;
     private IReadOnlyList<DownloadableMod> _all = [];
 
     public ObservableCollection<DownloadableMod> Mods { get; } = [];
@@ -41,10 +44,13 @@ public partial class ModDownloaderViewModel : ViewModelBase
         GameInstall install,
         string moduleFilter,
         IModlistService modlist,
-        IDialogService dialogs)
+        IDialogService dialogs,
+        IGameLauncher launcher)
     {
         _modlist = modlist;
         _dialogs = dialogs;
+        _launcher = launcher;
+        _install = install;
         _searchText = moduleFilter;
 
         Header = "Popular mods for " + install.Variant switch
@@ -124,6 +130,23 @@ public partial class ModDownloaderViewModel : ViewModelBase
         Status = mod.PatchLink.Length > 0
             ? $"Opened the download and patch links of {mod.Name} in your browser."
             : $"Opened the download link of {mod.Name} in your browser.";
+    }
+
+    /// <summary>
+    /// Runs a downloaded Windows installer (e.g. a mod's Setup.exe) against the game: directly on
+    /// Windows, inside the game's Proton/Wine prefix on Linux so it finds the install.
+    /// </summary>
+    [RelayCommand]
+    private async Task RunInstallerAsync()
+    {
+        var exe = await _dialogs.PickFileAsync("Select the mod installer (.exe) to run");
+        if (exe is null)
+            return;
+
+        var result = await _launcher.RunInGamePrefixAsync(_install, exe);
+        Status = result.Started
+            ? $"Started {System.IO.Path.GetFileName(exe)}. {result.Detail}"
+            : $"Could not run the installer: {result.Detail}";
     }
 
     [RelayCommand]
