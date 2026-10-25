@@ -621,5 +621,72 @@ namespace DowModManager.Tests
             Assert.True(result.Started);
             Assert.Contains("cancelled", result.Detail);
         }
+
+        // ---- fixed-base installers (relocations stripped + ASLR flag) ----------------------
+
+        /// <summary>A minimal PE header: PE32 or PE32+, with the given characteristics.</summary>
+        private static byte[] PeHeader(bool relocsStripped, bool dynamicBase, bool pe32 = true)
+        {
+            var bytes = new byte[512];
+            bytes[0] = (byte)'M';
+            bytes[1] = (byte)'Z';
+            BitConverter.GetBytes(0x80).CopyTo(bytes, 0x3C);
+            "PE\0\0"u8.ToArray().CopyTo(bytes, 0x80);
+            BitConverter.GetBytes((ushort)(relocsStripped ? 0x0103 : 0x0102)).CopyTo(bytes, 0x80 + 22);
+            BitConverter.GetBytes((ushort)(pe32 ? 0x10b : 0x20b)).CopyTo(bytes, 0x80 + 24);
+            BitConverter.GetBytes((ushort)(dynamicBase ? 0x8540 : 0x8500)).CopyTo(bytes, 0x80 + 24 + 70);
+            return bytes;
+        }
+
+        [Theory]
+        [InlineData(true, true, true, true)]
+        [InlineData(false, true, true, false)]
+        [InlineData(true, false, true, false)]
+        [InlineData(true, true, false, false)]
+        public void FixedBase_OnlyStrippedRelocsWithAslrOn32Bit_NeedsACopy(bool stripped, bool aslr, bool pe32, bool expected)
+        {
+            Assert.Equal(expected, FixedBaseWorkaround.NeedsCopy(PeHeader(stripped, aslr, pe32)));
+            Assert.False(FixedBaseWorkaround.NeedsCopy("not a PE file"u8));
+        }
+
+        [Fact]
+        public void FixedBase_CopySitsBesideTheOriginal_WithoutTheAslrFlag()
+        {
+            Directory.CreateDirectory(_root);
+            string exe = Path.Combine(_root, "Setup.exe");
+            File.WriteAllBytes(exe, PeHeader(relocsStripped: true, dynamicBase: true));
+
+            string? copy = FixedBaseWorkaround.CreateCopy(exe);
+
+            Assert.Equal(Path.Combine(_root, ".Setup.dmm.exe"), copy);
+            Assert.False(FixedBaseWorkaround.NeedsCopy(File.ReadAllBytes(copy!)));
+            Assert.True(FixedBaseWorkaround.NeedsCopy(File.ReadAllBytes(exe)));
+            Assert.Null(FixedBaseWorkaround.CreateCopy(copy!));
+        }
+
+        [Fact]
+        public async Task PrefixRun_FixedBaseInstaller_RunsTheCopy_ThenDeletesIt()
+        {
+            if (OperatingSystem.IsWindows())
+                return;
+            Directory.CreateDirectory(_root);
+            string exe = Path.Combine(_root, "Setup.exe");
+            File.WriteAllBytes(exe, PeHeader(relocsStripped: true, dynamicBase: true));
+            string copy = Path.Combine(_root, ".Setup.dmm.exe");
+            var started = new List<ProcessStartInfo>();
+            var launcher = new LinuxGameLauncher(Host(installedProton: "/p/proton"), new ScriptedFinder(Array.Empty<int>()),
+                startProcess: psi =>
+                {
+                    started.Add(psi);
+                    return Process.Start(new ProcessStartInfo("/bin/sh") { ArgumentList = { "-c", "sleep 0.2" } });
+                });
+
+            var result = await launcher.RunInGamePrefixAsync(SteamGame(), exe);
+
+            Assert.True(result.Started, result.Detail);
+            Assert.Equal(["run", copy], started.Single().ArgumentList);
+            Assert.True(SpinWait.SpinUntil(() => !File.Exists(copy), TimeSpan.FromSeconds(5)));
+            Assert.True(File.Exists(exe));
+        }
     }
 }
