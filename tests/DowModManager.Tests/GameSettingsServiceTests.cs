@@ -29,6 +29,49 @@ namespace DowModManager.Tests
             return dir;
         }
 
+        // Verbatim Definitive Edition Local.ini: keys the manager doesn't know (screenvsync,
+        // screengama) and values its validators reject (screenwindowed=2, a real adapter name).
+        private const string DefinitiveEditionLocalIni =
+            "[global]\r\nforce_watch_movies=1\r\nplayerprofile=Profile1\r\nscreenadapter=0\r\n" +
+            "screenantialias=0\r\nscreendevice=NVIDIA GeForce RTX 4070 Ti\r\nscreengama=10\r\n" +
+            "screengamma=10\r\nscreenheight=1080\r\nscreenrefresh=0\r\nscreenvsync=1\r\n" +
+            "screenwidth=1920\r\nscreenwindowed=2\r\ntexturedetail=2\r\n";
+
+        [Fact]
+        public void Write_ExistingLocalIni_KeepsUnknownKeysAndUnchangedRejectedValues()
+        {
+            string path = Path.Combine(_dir, "Local.ini");
+            File.WriteAllText(path, DefinitiveEditionLocalIni);
+
+            var s = _service.Read(_dir);
+            _service.Write(_dir, s);
+
+            Assert.Equal(DefinitiveEditionLocalIni, File.ReadAllText(path));
+        }
+
+        [Fact]
+        public void Write_ExistingLocalIni_UpdatesChangedValuesInPlace()
+        {
+            string path = Path.Combine(_dir, "Local.ini");
+            File.WriteAllText(path, DefinitiveEditionLocalIni);
+
+            var s = _service.Read(_dir);
+            s[K.ScreenWidth] = "2560";
+            s[K.ScreenWindowed] = "1";
+            s[K.SoundQuality] = "1";
+            _service.Write(_dir, s);
+
+            string[] lines = File.ReadAllLines(path);
+            Assert.Contains("screenwidth=2560", lines);
+            Assert.Contains("screenwindowed=1", lines);
+            Assert.Contains("screenvsync=1", lines);
+            Assert.Contains("screendevice=NVIDIA GeForce RTX 4070 Ti", lines);
+            Assert.Equal($"{K.SoundQuality}=1", lines[^1]);
+            Assert.DoesNotContain(lines, l => l.StartsWith(K.ShadowMap + "="));
+            Assert.Equal(1, lines.Count(l => l.StartsWith("screenwidth=")));
+            CrlfAssert.File(path);
+        }
+
         [Fact]
         public void Read_WithoutFiles_ReturnsDefaults()
         {

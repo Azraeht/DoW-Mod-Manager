@@ -229,13 +229,61 @@ namespace DoW_Mod_Manager.Services
             WritePlayerConfig(userDataDir, settings);
         }
 
+        /// <summary>
+        /// Merges the settings into an existing <c>Local.ini</c> instead of rewriting it: lines the
+        /// manager does not manage (e.g. the Definitive Edition's <c>screenvsync</c>) are kept
+        /// verbatim, and a value the validators rejected on read (DE's <c>screenwindowed=2</c>, a
+        /// real adapter name in <c>screendevice</c>) is kept unless the user changed it from the
+        /// default it was read as. Missing keys are only added when they differ from the default,
+        /// or when the file is created.
+        /// </summary>
         private static void WriteLocalIni(string userDataDir, GameSettings settings)
         {
-            var sb = new StringBuilder("[global]").AppendLine();
-            foreach (string key in LocalIniKeys)
-                sb.Append(key).Append('=').Append(settings[key]).AppendLine();
+            string path = GamePaths.LocalIni(userDataDir);
+            GameSettings defaults = GetDefaults(baseModule: settings[K.CurrentMod]);
 
-            WindowsText.WriteAllText(GamePaths.LocalIni(userDataDir), sb.ToString());
+            if (!File.Exists(path))
+            {
+                var sb = new StringBuilder("[global]").AppendLine();
+                foreach (string key in LocalIniKeys)
+                    sb.Append(key).Append('=').Append(settings[key]).AppendLine();
+
+                WindowsText.WriteAllText(path, sb.ToString());
+                return;
+            }
+
+            var lines = File.ReadAllLines(path).ToList();
+            var written = new HashSet<string>();
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                string line = lines[i].Trim();
+                int eq = line.IndexOf('=');
+                if (eq <= 0 || eq != line.LastIndexOf('='))
+                    continue;
+
+                string key = line[..eq];
+                if (!LocalIniKeys.Contains(key) || !written.Add(key))
+                    continue;
+
+                string existing = line[(eq + 1)..];
+                bool readAsDefault = !LocalIniValidators[key](existing);
+                if (readAsDefault && settings[key] == defaults[key])
+                    continue;
+
+                lines[i] = $"{key}={settings[key]}";
+            }
+
+            if (!lines.Any(l => l.Trim().Equals("[global]", StringComparison.OrdinalIgnoreCase)))
+                lines.Insert(0, "[global]");
+
+            foreach (string key in LocalIniKeys)
+            {
+                if (!written.Contains(key) && settings[key] != defaults[key])
+                    lines.Add($"{key}={settings[key]}");
+            }
+
+            WindowsText.WriteAllLines(path, lines);
         }
 
         private static void WriteDriverConfig(string installDir, GameSettings settings)
