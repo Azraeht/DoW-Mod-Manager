@@ -32,6 +32,8 @@ public partial class App : Application
             {
                 DataContext = Services.GetRequiredService<MainWindowViewModel>()
             };
+            // Stops background work such as waiting for a launched game's process.
+            desktop.MainWindow.Closed += (_, _) => Services.GetRequiredService<ModManagerViewModel>().OnClosed();
         }
 
         base.OnFrameworkInitializationCompleted();

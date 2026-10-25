@@ -54,7 +54,7 @@ namespace DowModManager.Tests
             DirectoryExists = d => dirs?.Contains(d) == true,
             IsFlatpakSteamInstalled = () => flatpakSteam,
             HasSteamUrlHandler = () => steamUrlHandler,
-            FindInstalledProton = () => installedProton,
+            SelectProton = _ => installedProton is null ? null : new ProtonSelection(installedProton, "test pick"),
             HomeDirectory = Home
         };
 
@@ -417,8 +417,14 @@ namespace DowModManager.Tests
             // 1st scan = before launch (an old instance 50), then nothing, then the new game 4242.
             var launcher = Launcher(new ScriptedFinder([50], [50], [50, 4242]), started);
 
-            var result = await launcher.LaunchAsync(SteamGame(), new LaunchOptions());
+            var launched = await launcher.LaunchAsync(SteamGame(), new LaunchOptions());
 
+            // Returns at once: the Steam client pid is not reported as the game.
+            Assert.True(launched.Started);
+            Assert.Equal(0, launched.ProcessId);
+            Assert.NotNull(launched.GameConfirmed);
+
+            var result = await launched.GameConfirmed!;
             Assert.True(result.Started);
             Assert.Equal(4242, result.ProcessId);
             Assert.Equal("Soulstorm.exe", result.ProcessName);
@@ -431,7 +437,7 @@ namespace DowModManager.Tests
             var started = new List<ProcessStartInfo>();
             var launcher = Launcher(new ScriptedFinder(Array.Empty<int>()), started);
 
-            var result = await launcher.LaunchAsync(SteamGame(), new LaunchOptions());
+            var result = await (await launcher.LaunchAsync(SteamGame(), new LaunchOptions())).GameConfirmed!;
 
             Assert.True(result.Started);
             Assert.Equal(0, result.ProcessId);
@@ -448,6 +454,46 @@ namespace DowModManager.Tests
 
             Assert.False(result.Started);
             Assert.False(string.IsNullOrEmpty(result.Detail));
+            Assert.Null(result.GameConfirmed);
+        }
+
+        [Fact]
+        public async Task LaunchDirectWine_EarlyNonZeroExit_ReportsFailureAsynchronously()
+        {
+            // `sh -c "exit 3"` stands in for a wine/proton command that dies before the game appears.
+            if (OperatingSystem.IsWindows())
+                return;
+
+            var launcher = new LinuxGameLauncher(
+                Host(path: new() { ["wine"] = "/usr/bin/wine" }),
+                new ScriptedFinder(Array.Empty<int>()),
+                gameStartTimeout: TimeSpan.FromSeconds(10),
+                pollInterval: TimeSpan.FromMilliseconds(10),
+                startProcess: _ => Process.Start(new ProcessStartInfo("/bin/sh") { ArgumentList = { "-c", "exit 3" } }));
+
+            var launched = await launcher.LaunchAsync(GogGame(), new LaunchOptions());
+            Assert.True(launched.Started);
+
+            var result = await launched.GameConfirmed!;
+            Assert.False(result.Started);
+            Assert.Contains("exited with code 3", result.Detail);
+        }
+
+        [Fact]
+        public async Task Launch_CancelledWait_CompletesWithoutThrowing()
+        {
+            using var cts = new CancellationTokenSource();
+            var launcher = new LinuxGameLauncher(
+                Host(path: new() { ["steam"] = "/usr/bin/steam" }), new ScriptedFinder(Array.Empty<int>()),
+                gameStartTimeout: TimeSpan.FromSeconds(30), pollInterval: TimeSpan.FromMilliseconds(10),
+                startProcess: _ => Process.GetCurrentProcess());
+
+            var launched = await launcher.LaunchAsync(SteamGame(), new LaunchOptions(), cts.Token);
+            cts.Cancel();
+            var result = await launched.GameConfirmed!;
+
+            Assert.True(result.Started);
+            Assert.Contains("cancelled", result.Detail);
         }
     }
 }

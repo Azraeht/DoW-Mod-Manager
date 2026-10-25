@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using DoW_Mod_Manager.Abstractions;
@@ -21,8 +20,10 @@ namespace DoW_Mod_Manager.Platform.Linux;
 /// <item>Otherwise the newest installed Proton is run directly (<c>proton run</c>).</item>
 /// <item>Last resort: plain Wine (GOG installs via Heroic/Lutris/Bottles, or plain wine).</item>
 /// </list>
-/// When Steam (or Proton) starts the game, the started process is not the game, so the launcher
-/// polls <c>/proc</c> (<see cref="IGameProcessFinder"/>) for the game exe and reports its pid.
+/// When Steam (or Proton) starts the game, the started process is not the game, so after
+/// returning the launcher keeps polling <c>/proc</c> (<see cref="IGameProcessFinder"/>) for the game
+/// exe in the background and reports its pid through <see cref="GameLaunchResult.GameConfirmed"/>.
+/// Direct Proton uses the build Steam would pick (<see cref="ProtonToolResolver"/>).
 /// The legacy Windows post-launch tweaks (CPU affinity, in-memory fog removal) are Windows-only and
 /// become no-ops here; when requested that is noted in <see cref="GameLaunchResult.Detail"/>.
 /// <para>Environment overrides:</para>
@@ -66,7 +67,12 @@ public sealed class LinuxGameLauncher : IGameLauncher
         _start = startProcess ?? Process.Start;
     }
 
-    public async Task<GameLaunchResult> LaunchAsync(GameInstall game, LaunchOptions options, CancellationToken ct = default)
+    /// <summary>
+    /// Starts the launch command and returns at once. The game pid is confirmed in the background
+    /// and reported through <see cref="GameLaunchResult.GameConfirmed"/>; <paramref name="ct"/>
+    /// cancels that background wait.
+    /// </summary>
+    public Task<GameLaunchResult> LaunchAsync(GameInstall game, LaunchOptions options, CancellationToken ct = default)
     {
         var arguments = options.ToArgumentString();
 
@@ -80,79 +86,98 @@ public sealed class LinuxGameLauncher : IGameLauncher
         {
             var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(game, arguments, _host, out var error);
             if (plan is null)
-                return new GameLaunchResult { Started = false, Detail = error };
+                return Task.FromResult(new GameLaunchResult { Started = false, Detail = error });
 
             // Game instances that were already running must not be mistaken for the new one.
             var preexisting = new HashSet<int>(_finder.FindProcesses(game.ExecutableName));
 
-            using var process = _start(plan.StartInfo);
+            var process = _start(plan.StartInfo);
             if (process is null)
-                return new GameLaunchResult { Started = false, Detail = $"Process.Start returned null for: {plan.Description}" };
+                return Task.FromResult(new GameLaunchResult { Started = false, Detail = $"Process.Start returned null for: {plan.Description}" });
 
-            var detail = new StringBuilder(plan.Description);
+            var detail = plan.Description;
             if (unsupportedNotes.Count > 0)
-                detail.Append(" | ").Append(string.Join("; ", unsupportedNotes));
+                detail += " | " + string.Join("; ", unsupportedNotes);
 
-            int? gamePid;
+            // Direct Proton/Wine: the started process lives as long as the game, so it is a usable
+            // provisional handle. Through Steam it is the Steam client, so report no pid yet.
+            return Task.FromResult(new GameLaunchResult
+            {
+                Started = true,
+                ProcessId = plan.ViaSteam ? 0 : SafeId(process),
+                ProcessName = plan.ViaSteam ? "" : SafeProcessName(process),
+                Detail = detail,
+                GameConfirmed = Task.Run(() => ConfirmGameAsync(game, plan, process, preexisting, detail, ct), CancellationToken.None)
+            });
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new GameLaunchResult
+            {
+                Started = false,
+                Detail = $"Launch failed: {ex.GetType().Name}: {ex.Message}"
+            });
+        }
+    }
+
+    /// <summary>Background part of <see cref="LaunchAsync"/>: waits for the game exe. Never throws.</summary>
+    private async Task<GameLaunchResult> ConfirmGameAsync(
+        GameInstall game, LaunchPlan plan, Process process, HashSet<int> preexisting, string detail, CancellationToken ct)
+    {
+        using (process)
+        {
             try
             {
                 // The Steam client may exit at once (already running) or keep running (it was
                 // just started): neither says anything about the game, so only stop early on a
                 // failing direct Proton/Wine launch.
-                gamePid = await _finder.WaitForNewProcessAsync(
+                var gamePid = await _finder.WaitForNewProcessAsync(
                     game.ExecutableName, preexisting, _gameStartTimeout, _pollInterval,
                     giveUp: plan.ViaSteam ? null : () => HasExited(process),
                     ct).ConfigureAwait(false);
+
+                if (gamePid is { } pid)
+                {
+                    return new GameLaunchResult
+                    {
+                        Started = true,
+                        ProcessId = pid,
+                        ProcessName = game.ExecutableName,
+                        Detail = detail
+                    };
+                }
+
+                if (!plan.ViaSteam && HasExited(process) && SafeExitCode(process) is { } code and not 0)
+                {
+                    return new GameLaunchResult
+                    {
+                        Started = false,
+                        Detail = $"{plan.Route} exited with code {code} before {game.ExecutableName} appeared. {detail}"
+                    };
+                }
+
+                var trackLauncher = !plan.ViaSteam && !HasExited(process);
+                return new GameLaunchResult
+                {
+                    Started = true,
+                    ProcessId = trackLauncher ? SafeId(process) : 0,
+                    ProcessName = trackLauncher ? SafeProcessName(process) : "",
+                    Detail = $"{detail} | the {game.ExecutableName} process could not be confirmed within "
+                           + $"{_gameStartTimeout.TotalSeconds:0} s"
+                };
             }
             catch (OperationCanceledException)
             {
-                return new GameLaunchResult
-                {
-                    Started = true,
-                    Detail = detail.Append(" | stopped waiting for the game process (cancelled)").ToString()
-                };
+                return new GameLaunchResult { Started = true, Detail = detail + " | stopped waiting for the game process (cancelled)" };
             }
-
-            if (gamePid is { } pid)
+            catch (Exception ex)
             {
                 return new GameLaunchResult
                 {
                     Started = true,
-                    ProcessId = pid,
-                    ProcessName = game.ExecutableName,
-                    Detail = detail.ToString()
+                    Detail = $"{detail} | could not confirm the game process: {ex.GetType().Name}: {ex.Message}"
                 };
             }
-
-            if (!plan.ViaSteam && HasExited(process) && SafeExitCode(process) is { } code and not 0)
-            {
-                return new GameLaunchResult
-                {
-                    Started = false,
-                    Detail = $"{plan.Route} exited with code {code} before {game.ExecutableName} appeared. {detail}"
-                };
-            }
-
-            detail.Append($" | the {game.ExecutableName} process could not be confirmed within "
-                        + $"{_gameStartTimeout.TotalSeconds:0} s");
-
-            // Direct Proton/Wine: the started process lives as long as the game, so it is a usable handle.
-            var trackLauncher = !plan.ViaSteam && !HasExited(process);
-            return new GameLaunchResult
-            {
-                Started = true,
-                ProcessId = trackLauncher ? SafeId(process) : 0,
-                ProcessName = trackLauncher ? SafeProcessName(process) : "",
-                Detail = detail.ToString()
-            };
-        }
-        catch (Exception ex)
-        {
-            return new GameLaunchResult
-            {
-                Started = false,
-                Detail = $"Launch failed: {ex.GetType().Name}: {ex.Message}"
-            };
         }
     }
 

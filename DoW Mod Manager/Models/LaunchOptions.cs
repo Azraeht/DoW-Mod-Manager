@@ -53,4 +53,12 @@ public sealed class GameLaunchResult
 
     /// <summary>Human-readable note (e.g. the Proton command used) for logging/diagnostics.</summary>
     public string? Detail { get; init; }
+
+    /// <summary>
+    /// Set when the launcher keeps confirming the game process in the background (Linux: the
+    /// started process is Steam/Proton, not the game). Completes with the final outcome: the game
+    /// pid, <see cref="Started"/> = false when the launch command failed early, or a Detail saying
+    /// the pid could not be confirmed. Never faults. Null when the result is already final.
+    /// </summary>
+    public System.Threading.Tasks.Task<GameLaunchResult>? GameConfirmed { get; init; }
 }

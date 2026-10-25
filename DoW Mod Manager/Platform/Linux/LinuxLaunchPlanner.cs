@@ -57,14 +57,27 @@ public sealed class LinuxLaunchHost
     /// <summary>True when a <c>steam://</c> URL handler is registered (xdg-mime).</summary>
     public Func<bool> HasSteamUrlHandler { get; init; } = DefaultHasSteamUrlHandler;
 
-    /// <summary>Scans the Steam roots for the newest Proton script (overrides are handled by the planner).</summary>
-    public Func<string?> FindInstalledProton { get; init; } = DefaultFindInstalledProton;
+    /// <summary>
+    /// Picks the Proton script to run directly for a game (overrides are handled by the planner).
+    /// Defaults to <see cref="ProtonToolResolver.Select"/> over the game's and the default Steam roots.
+    /// </summary>
+    public Func<GameInstall, ProtonSelection?> SelectProton { get; init; }
 
     public string HomeDirectory { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     public LinuxLaunchHost()
     {
         IsFlatpakSteamInstalled = DefaultIsFlatpakSteamInstalled;
+        SelectProton = DefaultSelectProton;
+    }
+
+    private ProtonSelection? DefaultSelectProton(GameInstall game)
+    {
+        var roots = new List<string>();
+        if (!string.IsNullOrWhiteSpace(game.SteamRoot))
+            roots.Add(game.SteamRoot!);
+        roots.AddRange(SteamPaths.ExistingRoots());
+        return ProtonToolResolver.Select(game.SteamAppId, LinuxLaunchPlanner.CompatDataPath(game, this), roots);
     }
 
     // ---- real-environment defaults ----------------------------------------------------------
@@ -139,72 +152,6 @@ public sealed class LinuxLaunchHost
             return -1;
         }
     }
-
-    /// <summary>
-    /// Scans Steam's <c>compatibilitytools.d</c> and the bundled <c>common/Proton*</c> runtimes,
-    /// preferring the newest by version.
-    /// </summary>
-    private static string? DefaultFindInstalledProton()
-    {
-        var candidates = new List<string>();
-
-        foreach (var steamRoot in SteamPaths.ExistingRoots())
-        {
-            // Custom / GE-Proton tools.
-            CollectProtonScripts(Path.Combine(steamRoot, "compatibilitytools.d"), candidates);
-            // Bundled Valve Proton runtimes.
-            CollectProtonScripts(Path.Combine(steamRoot, "steamapps", "common"), candidates);
-        }
-
-        if (candidates.Count == 0)
-            return null;
-
-        // Prefer the newest: sort by a parsed version descending, then by name descending so
-        // "GE-Proton9-x" / "Proton 9.0" win over older ones.
-        return candidates
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderByDescending(ProtonVersionKey)
-            .ThenByDescending(p => p, StringComparer.OrdinalIgnoreCase)
-            .First();
-    }
-
-    /// <summary>Finds <c>&lt;dir&gt;/Proton*/proton</c> scripts and adds them to <paramref name="into"/>.</summary>
-    private static void CollectProtonScripts(string dir, List<string> into)
-    {
-        if (!Directory.Exists(dir))
-            return;
-
-        IEnumerable<string> subDirs;
-        try { subDirs = Directory.EnumerateDirectories(dir, "*Proton*"); }
-        catch (IOException) { return; }
-        catch (UnauthorizedAccessException) { return; }
-
-        foreach (var sub in subDirs)
-        {
-            var script = Path.Combine(sub, "proton");
-            if (File.Exists(script))
-                into.Add(script);
-        }
-    }
-
-    /// <summary>Extracts a comparable numeric key from a Proton directory name (e.g. 9.07 -&gt; 9.07).</summary>
-    private static double ProtonVersionKey(string protonScriptPath)
-    {
-        var dirName = Path.GetFileName(Path.GetDirectoryName(protonScriptPath)) ?? "";
-        var digits = new StringBuilder();
-        var seenDot = false;
-        foreach (var c in dirName)
-        {
-            if (char.IsDigit(c)) digits.Append(c);
-            else if (c == '.' && !seenDot && digits.Length > 0) { digits.Append('.'); seenDot = true; }
-            else if (digits.Length > 0 && c != '.') break;
-        }
-
-        return double.TryParse(digits.ToString(),
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out var v) ? v : 0d;
-    }
 }
 
 /// <summary>
@@ -252,7 +199,7 @@ public static class LinuxLaunchPlanner
                 return SteamUrlPlan(xdgOpen, appId, arguments, workingDir, notes);
         }
 
-        var proton = protonOverride ?? host.FindInstalledProton();
+        var proton = ResolveProton(game, protonOverride, host, notes);
         if (proton is not null)
             return ProtonPlan(game, game.ExecutablePath, proton, SplitArguments(arguments), arguments, workingDir, host, notes);
 
@@ -283,7 +230,7 @@ public static class LinuxLaunchPlanner
 
         if (!winePrefixForced && (game.ProtonPrefix is not null || game.Distribution == GameDistribution.Steam))
         {
-            var proton = protonOverride ?? host.FindInstalledProton();
+            var proton = ResolveProton(game, protonOverride, host, notes);
             if (proton is not null)
                 return ProtonPlan(game, exePath, proton, [], "", workingDir, host, notes);
         }
@@ -369,6 +316,22 @@ public static class LinuxLaunchPlanner
 
         notes.Add($"{ProtonOverrideEnv}=\"{overridePath}\" does not exist and was ignored");
         return null;
+    }
+
+    /// <summary>The override, else the Steam-consistent tool choice (its reason is added to <paramref name="notes"/>).</summary>
+    private static string? ResolveProton(GameInstall game, string? protonOverride, LinuxLaunchHost host, List<string> notes)
+    {
+        if (protonOverride is not null)
+        {
+            notes.Add($"Proton from {ProtonOverrideEnv}");
+            return protonOverride;
+        }
+
+        var selection = host.SelectProton(game);
+        if (selection is null)
+            return null;
+        notes.Add(selection.Reason);
+        return selection.ScriptPath;
     }
 
     /// <summary>Compatdata dir (STEAM_COMPAT_DATA_PATH) of <paramref name="game"/>.</summary>

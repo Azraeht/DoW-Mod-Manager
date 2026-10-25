@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -31,6 +32,9 @@ public partial class ModManagerViewModel : ViewModelBase
     private readonly IFeatureViewModelFactory _features;
     private readonly IGameExtrasService _extras;
     private readonly IGraphicsModService _graphics;
+
+    /// <summary>Cancels the background game-process confirmation of the previous launch.</summary>
+    private CancellationTokenSource? _launchTracking;
 
     public ObservableCollection<GameInstall> Installs { get; } = [];
     public ObservableCollection<ModInfo> Mods { get; } = [];
@@ -264,18 +268,20 @@ public partial class ModManagerViewModel : ViewModelBase
         {
             SaveSettings(SelectedInstall);
             Status = $"Launching {modName}…";
-            var result = await _launcher.LaunchAsync(SelectedInstall, BuildOptions(modName));
-            if (result.Started)
+
+            _launchTracking?.Cancel();
+            _launchTracking?.Dispose();
+            _launchTracking = new CancellationTokenSource();
+
+            var result = await _launcher.LaunchAsync(SelectedInstall, BuildOptions(modName), _launchTracking.Token);
+            if (!await ShowLaunchResultAsync(modName, result))
+                return;
+
+            if (result.GameConfirmed is { } confirmed)
             {
-                // ProcessId is 0 when the game was started through Steam and its pid could not be confirmed.
-                Status = result.ProcessId > 0
-                    ? $"Started {modName} (pid {result.ProcessId}). {result.Detail}"
-                    : $"Started {modName}. {result.Detail}";
-            }
-            else
-            {
-                Status = $"Launch failed: {result.Detail}";
-                await _dialogs.ShowMessageAsync($"Could not launch {modName}.\n\n{result.Detail}", "Launch failed");
+                Status = $"Started {modName}, waiting for the game process… {result.Detail}";
+                // Runs after Busy is reset, so the Start buttons are usable while we wait.
+                _ = TrackGameAsync(modName, confirmed);
             }
         }
         catch (Exception ex)
@@ -287,6 +293,39 @@ public partial class ModManagerViewModel : ViewModelBase
             Busy = false;
         }
     }
+
+    /// <summary>Shows a launch outcome in the status line (and a dialog on failure). Returns Started.</summary>
+    private async Task<bool> ShowLaunchResultAsync(string modName, GameLaunchResult result)
+    {
+        if (result.Started)
+        {
+            // ProcessId is 0 when the game was started through Steam and its pid is not (yet) confirmed.
+            Status = result.ProcessId > 0
+                ? $"Started {modName} (pid {result.ProcessId}). {result.Detail}"
+                : $"Started {modName}. {result.Detail}";
+            return true;
+        }
+
+        Status = $"Launch failed: {result.Detail}";
+        await _dialogs.ShowMessageAsync($"Could not launch {modName}.\n\n{result.Detail}", "Launch failed");
+        return false;
+    }
+
+    /// <summary>Reports the background game-process confirmation; never throws.</summary>
+    private async Task TrackGameAsync(string modName, Task<GameLaunchResult> confirmed)
+    {
+        try
+        {
+            await ShowLaunchResultAsync(modName, await confirmed);
+        }
+        catch (Exception ex)
+        {
+            Status = $"Could not confirm that {modName} started: {ex.Message}";
+        }
+    }
+
+    /// <summary>Stops waiting for a launched game's process.</summary>
+    public override void OnClosed() => _launchTracking?.Cancel();
 
     [RelayCommand]
     private void LoadManualPath()
