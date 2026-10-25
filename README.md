@@ -1,12 +1,18 @@
 ![image](https://user-images.githubusercontent.com/19975052/147577379-4ab095f3-e91a-42f2-8cae-fbbb50658130.png)
 
-# DoW Mod Manager v2.6.1.0
+# DoW Mod Manager v2.7.0.1-linux.1
+
+> **Linux port.** This fork ports [IgorTheLight/DoW-Mod-Manager](https://github.com/IgorTheLight/DoW-Mod-Manager)
+> (itself a fork of [Fragjacker/DoW-Mod-Manager](https://github.com/Fragjacker/DoW-Mod-Manager)) to .NET 8 + Avalonia.
+> The version is the upstream base it is built on (`2.7.0.1`) plus a port release counter (`-linux.1`).
+> Releases of this port are published at <https://github.com/Azraeht/DoW-Mod-Manager/releases>;
+> the Windows `.exe` described in the Windows section below is upstream's build, not this port's.
 
 This application allows for an easy launch of mods and management of large collections of mods for Warhammer 40K Dawn of War series.
 
-## INSTALLATION:
+## INSTALLATION (Windows):
 
-- In order to install the Mod Manager drop the "DoW Mod Manager v2.6.1.0.exe" into your primary game directory which is either:
+- In order to install the Mod Manager drop the "DoW Mod Manager v2.7.0.1.exe" into your primary game directory which is either:
 
   - "..\Dawn of War - Soulstorm\"
   or
@@ -17,6 +23,86 @@ This application allows for an easy launch of mods and management of large colle
   - "..\Dawn of War - Gold\"
 
   DO NOT put executable file into a subfolder or it won't work!
+
+## INSTALLATION (Linux — native):
+
+This port (2.7.0.1-linux.x) runs the Mod Manager **natively on Linux** (.NET 8 + Avalonia). It no
+longer needs to sit inside the game folder, and you do **not** have to configure Wine
+yourself — the manager detects your Steam/Proton installation and launches the game
+through Proton (falling back to plain Wine). The game itself stays a Windows executable run
+under Proton; only the manager is native.
+
+1. Download the latest `DoW_Mod_Manager-<version>-x86_64.AppImage` (e.g.
+   `DoW_Mod_Manager-2.7.0.1-linux.1-x86_64.AppImage`) from the Releases page.
+2. Make it executable and run it:
+
+   ```bash
+   chmod +x DoW_Mod_Manager-*-x86_64.AppImage
+   ./DoW_Mod_Manager-*-x86_64.AppImage
+   ```
+
+3. The manager auto-discovers Dawn of War installs from your Steam libraries
+   (`steamapps/common/Dawn of War*`). If it cannot find one, paste the game folder path into
+   the field at the top and press **Load**.
+
+Requirements: a Steam install of Dawn of War with Proton enabled (Steam Play). Native,
+Flatpak and Snap Steam are supported, including extra library folders on other drives.
+Supported games: Anniversary Edition (Soulstorm, Dark Crusade, Winter Assault, Original) and
+the Definitive Edition.
+
+How the game is started:
+
+- Steam installs are launched through Steam (`steam -applaunch <appid> -modname <mod> ...`) so
+  the Proton version you picked for the game in Steam is used. **The first time, Steam asks
+  you to confirm the launch arguments** — accept it, or nothing will start.
+- Without a usable Steam client the manager runs Proton directly, picking the build mapped to
+  the game in Steam (or the one that created its prefix), then falls back to plain Wine.
+- Non-Steam installs (GOG through Heroic, Lutris, Bottles...) are not auto-detected: paste the
+  game folder and press **Load**. They run with Wine; set `DOWMM_WINEPREFIX` to the prefix the
+  game is installed in.
+
+Environment overrides:
+
+| Variable | Effect |
+|---|---|
+| `DOWMM_PROTON` | Full path to a `proton` script; always run the game with it |
+| `DOWMM_WINE` | Wine binary name or path for the Wine fallback |
+| `DOWMM_WINEPREFIX` | Wine prefix for the Wine fallback (otherwise the Proton prefix, then `WINEPREFIX`) |
+| `STEAM_DIR` | Extra Steam client root to search |
+
+Definitive Edition: the game keeps `Local.ini`, `warnings.log`, profiles and a `Mods` folder
+in its per-user data folder, not in the game folder. On Linux that is inside the Proton prefix:
+`steamapps/compatdata/3556750/pfx/drive_c/users/steamuser/AppData/Roaming/Relic Entertainment/Dawn of War`
+(`%APPDATA%\Relic Entertainment\Dawn of War` on Windows). The manager lists mods from both the
+game folder and that `Mods` folder (`Mods/<mod>.module` or `Mods/<mod>/<mod>.module`), and its
+settings window edits that `Local.ini`, keeping any setting it does not manage. The GOG build
+(`W40k_gog.exe`) is recognised too. To use the mods of a separate Soulstorm installation without
+copying them, enter its folder in **Soulstorm folder** (shown for the Definitive Edition) and press
+**Apply**; leave it empty and apply to stop.
+
+Installing mods: select a mod in the Mod Downloader and press **Install**. ModDB only serves
+downloads to browsers, so the manager opens the download in yours and watches your downloads
+folder (files you downloaded earlier are offered first). Then it runs the mod's installer inside
+the game's Proton prefix (point it at the game folder, shown as `Z:\...` and in the progress
+text), or extracts an archive release (.zip, .7z, .rar) into the game folder from the folder that
+holds its `.module` file. **Uninstall** runs the mod's uninstaller, or removes the files the
+manager extracted. Installs are recorded in `installed-mods.json` in the manager's data folder.
+For anything else, **Manual steps** keeps **Download only** and **Run installer…**.
+
+Not available on Linux: CPU affinity, in-memory fog removal, timer resolution and power plans
+(greyed out). The 4 GB patch is disabled for the 64-bit Definitive Edition executable, which
+does not need it.
+
+DXVK and dgVoodoo2 work on Linux too. Proton already ships DXVK, so this is optional: the
+buttons put upstream's tested DXVK build (or dgVoodoo2) in the game folder, and it is loaded
+instead of Proton's own. When the manager starts the game through Proton or Wine itself, it sets
+`WINEDLLOVERRIDES` for you. When it goes through Steam, Proton normally picks the game-folder DLLs
+on its own; if it does not, add `WINEDLLOVERRIDES="d3d9,d3d8=n,b" %command%` to the game's Steam
+launch options. DXVK and dgVoodoo2 both provide `d3d9.dll`, so installing one removes the other.
+
+> Building from source: `dotnet publish "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -f net8.0 -r
+> linux-x64 --self-contained -p:PublishSingleFile=true -o artifacts/linux-x64`, then
+> `bash packaging/linux/build-appimage.sh artifacts/linux-x64`. See `docs/ARCHITECTURE.md`.
 
 ## MOD MANAGER USAGE:
 
@@ -40,6 +126,9 @@ This application allows for an easy launch of mods and management of large colle
 - **Toggle 4 Gb RAM Patch**: This button allows for convenient activation and deactivation of the LAA flag for the game executable
 
 - **Install DXVK** : Installs and enables the latest versiuon of DXVK that was tested and configured for Dawn of War for potentially better performance and less crashes! Button would change to "Remove DXVK" if you have the latest version or "Update DXVK" if your version is outdated (or if you are missing one of 4 files).
+
+- **Install dgVoodoo2** : Installs and enables the latest versiuon of dgVoodoo2 that was tested and configured for Dawn of War for potentially better performance and less crashes! Button would change to "Delete dgVoodoo2" if you have the latest version or "Update dgVoodoo2" if your version is outdated (or if you are missing one of 4 files).
+The difference with DXVK is that dgVoodoo2 is not translating DirectX calls to Vulkan but translates them to a newer DirectX calls (from DX9 to DX11)
 
 - **Install a better camera** : Installs and enables a custom script that improves default camera a lot! Some mods would rewrite this camera with their own but this option is mostly for playing without any mods ;-)
 
