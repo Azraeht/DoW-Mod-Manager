@@ -75,7 +75,10 @@ in its per-user data folder, not in the game folder. On Linux that is inside the
 `steamapps/compatdata/3556750/pfx/drive_c/users/steamuser/AppData/Roaming/Relic Entertainment/Dawn of War`
 (`%APPDATA%\Relic Entertainment\Dawn of War` on Windows). The manager lists mods from both the
 game folder and that `Mods` folder (`Mods/<mod>.module` or `Mods/<mod>/<mod>.module`), and its
-settings window edits that `Local.ini`, keeping any setting it does not manage.
+settings window edits that `Local.ini`, keeping any setting it does not manage. The GOG build
+(`W40k_gog.exe`) is recognised too. To use the mods of a separate Soulstorm installation without
+copying them, enter its folder in **Soulstorm folder** (shown for the Definitive Edition) and press
+**Apply**; leave it empty and apply to stop.
 
 Mod installers: most mods ship as Windows `Setup.exe` installers. Use **Run installer…** in the
 Mod Downloader to run one inside the game's Proton prefix, and point it at the game folder

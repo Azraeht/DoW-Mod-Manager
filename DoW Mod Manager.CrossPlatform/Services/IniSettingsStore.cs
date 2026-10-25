@@ -13,6 +13,9 @@ namespace DoW_Mod_Manager.Services
         // Number of distinct Action enum states; ActionState must be below this (legacy rule).
         private const int ActionStateCount = 6;
 
+        /// <summary>Settings holding text (paths), written after the numeric ones.</summary>
+        private static readonly string[] StringKeys = [SettingsKeys.SoulstormDir];
+
         /// <inheritdoc />
         public IDictionary<string, int> GetDefaults()
         {
@@ -124,7 +127,61 @@ namespace DoW_Mod_Manager.Services
             ArgumentNullException.ThrowIfNull(settings);
 
             string configPath = Path.Combine(directory, ConfigFileName);
+            WriteAll(configPath, settings, ReadStrings(configPath));
+        }
 
+        /// <inheritdoc />
+        public string? ReadString(string directory, string key)
+        {
+            if (string.IsNullOrEmpty(directory))
+                throw new ArgumentException("Directory must be provided.", nameof(directory));
+            return ReadStrings(Path.Combine(directory, ConfigFileName)).TryGetValue(key, out string? value) ? value : null;
+        }
+
+        /// <inheritdoc />
+        public void WriteString(string directory, string key, string? value)
+        {
+            if (string.IsNullOrEmpty(directory))
+                throw new ArgumentException("Directory must be provided.", nameof(directory));
+            if (!StringKeys.Contains(key))
+                throw new ArgumentException($"{key} is not a text setting.", nameof(key));
+
+            string configPath = Path.Combine(directory, ConfigFileName);
+            var strings = ReadStrings(configPath);
+            if (string.IsNullOrWhiteSpace(value))
+                strings.Remove(key);
+            else
+                strings[key] = value.Trim();
+
+            WriteAll(configPath, Read(directory), strings);
+        }
+
+        /// <summary>
+        /// Text settings of the file. Unlike numeric lines (whose spaces the legacy reader strips),
+        /// the value is everything after the first "=", trimmed, so paths keep their spaces.
+        /// </summary>
+        private static Dictionary<string, string> ReadStrings(string configPath)
+        {
+            var strings = new Dictionary<string, string>(StringComparer.Ordinal);
+            if (!File.Exists(configPath))
+                return strings;
+
+            foreach (string line in File.ReadAllLines(configPath))
+            {
+                int eq = line.IndexOf('=');
+                if (eq <= 0)
+                    continue;
+                string key = line[..eq].Trim();
+                string value = line[(eq + 1)..].Trim();
+                if (StringKeys.Contains(key) && value.Length > 0)
+                    strings[key] = value;
+            }
+
+            return strings;
+        }
+
+        private static void WriteAll(string configPath, IDictionary<string, int> settings, IReadOnlyDictionary<string, string> strings)
+        {
             // Legacy writer order. The final line had no trailing newline in the original;
             // we keep the same ordering and emit one key per line.
             string[] orderedKeys =
@@ -145,18 +202,20 @@ namespace DoW_Mod_Manager.Services
                 SettingsKeys.DgVoodoo2UpdateCheck
             };
 
+            var entries = orderedKeys
+                .Select(key => $"{key}={(settings.TryGetValue(key, out int v) ? v : 0)}")
+                .Concat(StringKeys.Where(strings.ContainsKey).Select(key => $"{key}={strings[key]}"))
+                .ToList();
+
             // CRLF like the legacy writer: the file is shared with the Windows build.
             using var sw = new StreamWriter(File.Create(configPath)) { NewLine = WindowsText.NewLine };
-            for (int i = 0; i < orderedKeys.Length; i++)
+            for (int i = 0; i < entries.Count; i++)
             {
-                string key = orderedKeys[i];
-                int value = settings.TryGetValue(key, out int v) ? v : 0;
-
-                string entry = $"{key}={value}";
+                string entry = entries[i];
 
                 // Mirror the legacy writer: every line written with WriteLine except the last,
                 // which was written without a trailing newline.
-                if (i < orderedKeys.Length - 1)
+                if (i < entries.Count - 1)
                     sw.WriteLine(entry);
                 else
                     sw.Write(entry);

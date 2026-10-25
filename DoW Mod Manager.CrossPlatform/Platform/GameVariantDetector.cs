@@ -18,6 +18,9 @@ public static class GameVariantDetector
     public const string DarkCrusadeExe = "DarkCrusade.exe";
     public const string SoulstormExe = "Soulstorm.exe";
 
+    /// <summary>The GOG build of the Definitive Edition names its executable differently.</summary>
+    public const string DefinitiveEditionGogExe = "W40k_gog.exe";
+
     /// <summary>The Definitive Edition's own base module, absent from every classic install.</summary>
     public const string DefinitiveEditionModule = "DoWDE.module";
 
@@ -34,8 +37,9 @@ public static class GameVariantDetector
             return null;
 
         bool hasW40k = File.Exists(Path.Combine(directory, OriginalExe));
+        bool hasDefinitiveExe = hasW40k || File.Exists(Path.Combine(directory, DefinitiveEditionGogExe));
 
-        if (hasW40k && IsDefinitiveEdition(directory, steamAppId))
+        if (hasDefinitiveExe && IsDefinitiveEdition(directory, steamAppId))
             return GameVariant.DefinitiveEdition;
 
         if (File.Exists(Path.Combine(directory, SoulstormExe))) return GameVariant.Soulstorm;
@@ -44,6 +48,20 @@ public static class GameVariantDetector
         if (hasW40k) return GameVariant.Original;
         return null;
     }
+
+    /// <summary>
+    /// The executable launched for a variant installed in <paramref name="directory"/>: as
+    /// <see cref="ExecutableFor(GameVariant)"/>, except a GOG Definitive Edition (only
+    /// <c>W40k_gog.exe</c> present) gets its own exe name.
+    /// </summary>
+    public static string ExecutableFor(GameVariant variant, string directory) =>
+        IsGogDefinitiveEdition(variant, directory) ? DefinitiveEditionGogExe : ExecutableFor(variant);
+
+    /// <summary>True for a Definitive Edition folder holding the GOG executable and not the Steam one.</summary>
+    public static bool IsGogDefinitiveEdition(GameVariant variant, string directory) =>
+        variant == GameVariant.DefinitiveEdition
+        && !File.Exists(Path.Combine(directory, OriginalExe))
+        && File.Exists(Path.Combine(directory, DefinitiveEditionGogExe));
 
     /// <summary>The executable launched for a variant.</summary>
     public static string ExecutableFor(GameVariant variant) => variant switch

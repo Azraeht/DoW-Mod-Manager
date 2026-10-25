@@ -89,6 +89,9 @@ public partial class ModManagerViewModel : ViewModelBase
     [ObservableProperty] private bool _noFog;
 
     [ObservableProperty] private bool _cpuAffinityOptimization;
+
+    /// <summary>Definitive Edition: Soulstorm folder whose mods are listed too (edited, then applied).</summary>
+    [ObservableProperty] private string _soulstormDir = "";
     [ObservableProperty] private bool _isGogVersion;
 
     [NotifyCanExecuteChangedFor(nameof(StartModCommand))]
@@ -101,6 +104,8 @@ public partial class ModManagerViewModel : ViewModelBase
     public bool NoFogEnabled => SelectedInstall?.SupportsNoFog == true && _platform.IsWindows;
 
     public bool PerfTweaksSupported => _platform.IsWindows;
+
+    public bool IsDefinitiveEdition => SelectedInstall?.Variant == GameVariant.DefinitiveEdition;
 
     /// <summary>
     /// Tooltip of the DXVK / dgVoodoo2 buttons. On Linux the files replace Proton's own DXVK: the
@@ -154,7 +159,7 @@ public partial class ModManagerViewModel : ViewModelBase
 
             Installs.Clear();
             foreach (var g in found)
-                Installs.Add(g);
+                Installs.Add(WithUserSettings(g));
 
             if (Installs.Count > 0)
             {
@@ -175,8 +180,11 @@ public partial class ModManagerViewModel : ViewModelBase
     partial void OnSelectedInstallChanged(GameInstall? value)
     {
         OnPropertyChanged(nameof(NoFogEnabled));
+        OnPropertyChanged(nameof(IsDefinitiveEdition));
         if (value is null)
             return;
+
+        SoulstormDir = value.SoulstormModsDir ?? "";
 
         LoadSettings(value);
         LoadMods(value);
@@ -357,10 +365,89 @@ public partial class ModManagerViewModel : ViewModelBase
             return;
         }
 
-        if (Installs.All(g => g.InstallDir != install.InstallDir))
-            Installs.Add(install);
-        SelectedInstall = install;
+        var known = Installs.FirstOrDefault(g => g.InstallDir == install.InstallDir);
+        if (known is null)
+        {
+            known = WithUserSettings(install);
+            Installs.Add(known);
+        }
+        SelectedInstall = known;
         Status = $"Loaded {install.Variant} from {install.InstallDir}.";
+    }
+
+    /// <summary>Applies per-install settings that shape the install itself (the DE Soulstorm folder).</summary>
+    private GameInstall WithUserSettings(GameInstall install)
+    {
+        if (install.Variant != GameVariant.DefinitiveEdition)
+            return install;
+        try
+        {
+            return install.WithSoulstormModsDir(_settings.ReadString(install.InstallDir, SettingsKeys.SoulstormDir));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return install;
+        }
+    }
+
+    /// <summary>
+    /// Saves <see cref="SoulstormDir"/> for the selected Definitive Edition install (empty clears it)
+    /// and reloads the mod list. The folder must be a separate install: the Definitive Edition's
+    /// own folders are refused, as in the DE manager.
+    /// </summary>
+    [RelayCommand]
+    private void ApplySoulstormDir()
+    {
+        if (SelectedInstall is not { Variant: GameVariant.DefinitiveEdition } install)
+            return;
+
+        string? dir = string.IsNullOrWhiteSpace(SoulstormDir) ? null : SoulstormDir.Trim();
+        string note = "";
+        if (dir is not null)
+        {
+            if (!Directory.Exists(dir))
+            {
+                Status = $"The Soulstorm folder \"{dir}\" does not exist.";
+                return;
+            }
+
+            if (new[] { install.InstallDir, install.UserDataDir, install.ModsDir }.Any(d => SameDirectory(d, dir)))
+            {
+                Status = "Pick a separate Soulstorm installation, not one of the Definitive Edition's own folders.";
+                return;
+            }
+
+            if (GamePaths.ModuleFiles(dir).Count == 0)
+                note = " It has no .module files yet.";
+        }
+
+        try
+        {
+            _settings.WriteString(install.InstallDir, SettingsKeys.SoulstormDir, dir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"Could not save the Soulstorm folder: {ex.Message}";
+            return;
+        }
+
+        var updated = install.WithSoulstormModsDir(dir);
+        int index = Installs.IndexOf(install);
+        if (index >= 0)
+            Installs[index] = updated;
+        SelectedInstall = updated;
+        Status = dir is null
+            ? "Soulstorm mods are no longer listed."
+            : $"Mods from {dir} are listed too.{note}";
+    }
+
+    private bool SameDirectory(string? a, string b)
+    {
+        if (string.IsNullOrEmpty(a))
+            return false;
+        static string Normalise(string p) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(p));
+        return string.Equals(Normalise(a), Normalise(b),
+            _platform.IsWindows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     [RelayCommand]

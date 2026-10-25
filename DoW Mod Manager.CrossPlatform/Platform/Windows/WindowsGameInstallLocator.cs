@@ -42,7 +42,7 @@ public sealed class WindowsGameInstallLocator : IGameInstallLocator
         if (variant is null)
             return null;
 
-        return Build(directory, GameVariantDetector.ExecutableFor(variant.Value), variant.Value);
+        return Build(directory, GameVariantDetector.ExecutableFor(variant.Value, directory), variant.Value);
     }
 
     /// <summary>
@@ -72,9 +72,11 @@ public sealed class WindowsGameInstallLocator : IGameInstallLocator
             InstallDir = directory,
             ExecutableName = executable,
             Variant = variant,
-            // The Steam/GoG distinction is a user setting in the legacy app; default to Steam here.
-            // (Linux discovery and future Windows registry probing can refine this.)
-            Distribution = GameDistribution.Steam,
+            // The Steam/GoG distinction is a user setting in the legacy app; default to Steam here,
+            // except for the Definitive Edition, whose GOG build has its own exe name.
+            Distribution = GameVariantDetector.IsGogDefinitiveEdition(variant, directory)
+                ? GameDistribution.GoG
+                : GameDistribution.Steam,
             UserDataDir = userData,
             ModsDir = modsDir
         };

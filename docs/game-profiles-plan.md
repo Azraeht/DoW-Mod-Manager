@@ -72,10 +72,10 @@ public interface IGameProfile
 | | `ClassicProfile` (2.x base) | `DefinitiveEditionProfile` |
 |---|---|---|
 | Variants | Original, WinterAssault, DarkCrusade, Soulstorm | DefinitiveEdition |
-| Detect | exe priority Soulstorm > DC > WA > W40k (upstream `GetCurrentGameEXE`) | `W40k.exe` **and** (`DoWDE.module` **or** appid 3556750 in manifest/`steam_appid.txt`) |
-| Exe | per variant | `W40k.exe` (64-bit) |
+| Detect | exe priority Soulstorm > DC > WA > W40k (upstream `GetCurrentGameEXE`) | `W40k.exe` or `W40k_gog.exe`, **and** (`DoWDE.module` **or** appid 3556750 in manifest/`steam_appid.txt`) |
+| Exe | per variant | `W40k.exe` (Steam), `W40k_gog.exe` (GOG), 64-bit |
 | Base module | `W40k` | `DoWDE` |
-| `.module` dirs | install dir | install dir + `<UserData>/Mods` |
+| `.module` dirs | install dir | install dir + `<UserData>/Mods` (+ subfolders) + optional Soulstorm folder (`SoulstormDir`) |
 | User data | install dir | `%APPDATA%\Relic Entertainment\Dawn of War` → on Linux `compatdata/3556750/pfx/drive_c/users/steamuser/AppData/Roaming/…` |
 | LAA | yes (Steam vs GOG variant of the patch, as upstream) | no |
 | DXVK / dgVoodoo2 | yes, Windows and Linux | yes, Windows and Linux (upstream's DE manager offers both) |
@@ -120,15 +120,16 @@ route should run the launcher's own Wine build. Plain `wine` from PATH is only t
 2. **P2 – capabilities through profiles**: LAA, DXVK, no-fog and launch flags read from the profile.
    UI hides inapplicable toggles from the profile.
 3. **P3 – discovery sources**: split the Steam locator into a source. Add Heroic and Lutris with fixture tests.
-4. **P4 – DE polish**: verify the DE mod list section, DE launch flags and `Local.ini` keys on a real install.
+4. **P4 – DE polish**: verify the DE mod list section, DE launch flags (`-fullscreen` from the DE
+   manager's Experimental section) and `Local.ini` keys on a real install. Done already: GOG exe,
+   Soulstorm folder, `DXP2` as a base module.
 5. **Ongoing – upstream sync**: rebase on `upstream/master` per upstream release, bump `VersionPrefix`,
    reset the suffix to `linux.1`, and port new upstream behaviour (diff `DoW Mod Manager/` between the old and new base).
 
 ## Open decisions
 
-1. **Use the 1.x DE manager source?** It is MIT and public (`upstream/DE`), not closed. Reading it
-   would settle DE details (mod list section, settings, DXVK for DE) quickly, with attribution kept.
-   This plan currently follows your "do not copy" rule.
+1. **The 1.x DE manager source** (`upstream/DE`, MIT): used as a behavioural reference only (GOG exe
+   name, Soulstorm folder, base modules), reimplemented in the port, no code copied.
 2. **Heroic/Lutris/Bottles**: which launchers are in scope for P3?
 
 Settled: DXVK and dgVoodoo2 are ported on both OSes for every profile. The manager stays one

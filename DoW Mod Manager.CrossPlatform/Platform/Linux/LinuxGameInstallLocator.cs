@@ -136,9 +136,11 @@ public sealed class LinuxGameInstallLocator : IGameInstallLocator
         return new GameInstall
         {
             InstallDir = directory,
-            ExecutableName = GameVariantDetector.ExecutableFor(variant.Value),
+            ExecutableName = GameVariantDetector.ExecutableFor(variant.Value, directory),
             Variant = variant.Value,
-            Distribution = GameDistribution.Unknown,
+            Distribution = GameVariantDetector.IsGogDefinitiveEdition(variant.Value, directory)
+                ? GameDistribution.GoG
+                : GameDistribution.Unknown,
             UserDataDir = userData,
             ModsDir = modsDir
         };
@@ -166,7 +168,7 @@ public sealed class LinuxGameInstallLocator : IGameInstallLocator
         return new GameInstall
         {
             InstallDir = gameDir,
-            ExecutableName = GameVariantDetector.ExecutableFor(variant.Value),
+            ExecutableName = GameVariantDetector.ExecutableFor(variant.Value, gameDir),
             Variant = variant.Value,
             Distribution = GameDistribution.Steam,
             SteamAppId = appId,

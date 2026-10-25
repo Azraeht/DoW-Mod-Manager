@@ -32,7 +32,7 @@ namespace DoW_Mod_Manager.Services
             if (string.IsNullOrEmpty(install.InstallDir))
                 throw new ArgumentException("Install directory must be provided.", nameof(install));
 
-            return GetPlayableMods(GamePaths.ModuleDirectories(install.InstallDir, install.ModsDir), install.IsOldGame);
+            return GetPlayableMods(GamePaths.ModuleDirectories(install), install.IsOldGame);
         }
 
         private List<ModInfo> GetPlayableMods(IReadOnlyList<string> moduleDirectories, bool isOldGame)
@@ -87,12 +87,13 @@ namespace DoW_Mod_Manager.Services
             ArgumentNullException.ThrowIfNull(mod);
 
             // A mod's own directory first (Mods/X/ holds X and the mods shipped with it), then the
-            // install dir, then the Definitive Edition Mods dir and its subfolders.
+            // install dir, then the Definitive Edition Mods dir and its subfolders, then the
+            // Soulstorm folder the Definitive Edition may borrow mods from.
             var searchDirs = new List<string>();
             string? ownDir = string.IsNullOrEmpty(mod.ModuleFilePath) ? null : Path.GetDirectoryName(mod.ModuleFilePath);
             if (!string.IsNullOrEmpty(ownDir))
                 searchDirs.Add(ownDir);
-            searchDirs.AddRange(GamePaths.ModuleDirectories(install.InstallDir, install.ModsDir));
+            searchDirs.AddRange(GamePaths.ModuleDirectories(install));
 
             return ResolveDependencies(install.InstallDir, searchDirs, mod);
         }

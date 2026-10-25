@@ -124,5 +124,36 @@ namespace DowModManager.Tests
 
             CrlfAssert.File(Path.Combine(_dir, IniSettingsStore.ConfigFileName));
         }
+
+        [Fact]
+        public void WriteString_KeepsSpaces_AndSurvivesNumericWrites()
+        {
+            const string dir = "/home/me/Games/Dawn of War Soulstorm";
+            _store.WriteString(_dir, SettingsKeys.SoulstormDir, dir);
+
+            var settings = _store.Read(_dir);
+            settings[SettingsKeys.Dev] = 1;
+            _store.Write(_dir, settings);
+
+            Assert.Equal(dir, _store.ReadString(_dir, SettingsKeys.SoulstormDir));
+            Assert.Equal(1, _store.Read(_dir)[SettingsKeys.Dev]);
+            CrlfAssert.File(Path.Combine(_dir, IniSettingsStore.ConfigFileName));
+        }
+
+        [Fact]
+        public void WriteString_Empty_RemovesTheSetting()
+        {
+            _store.WriteString(_dir, SettingsKeys.SoulstormDir, "C:\\Games\\Soulstorm");
+            _store.WriteString(_dir, SettingsKeys.SoulstormDir, "");
+
+            Assert.Null(_store.ReadString(_dir, SettingsKeys.SoulstormDir));
+            Assert.DoesNotContain("SoulstormDir", File.ReadAllText(Path.Combine(_dir, IniSettingsStore.ConfigFileName)));
+        }
+
+        [Fact]
+        public void WriteString_RejectsNumericKeys()
+        {
+            Assert.Throws<ArgumentException>(() => _store.WriteString(_dir, SettingsKeys.Dev, "1"));
+        }
     }
 }

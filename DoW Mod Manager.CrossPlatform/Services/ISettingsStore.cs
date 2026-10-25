@@ -24,5 +24,17 @@ namespace DoW_Mod_Manager.Services
         /// The default settings dictionary (legacy defaults from <c>ModManagerForm</c>).
         /// </summary>
         IDictionary<string, int> GetDefaults();
+
+        /// <summary>
+        /// Reads a text setting such as <see cref="SettingsKeys.SoulstormDir"/> (spaces kept).
+        /// Null when the file or the key is missing or empty.
+        /// </summary>
+        string? ReadString(string directory, string key);
+
+        /// <summary>
+        /// Sets (or, with a null/empty <paramref name="value"/>, removes) a text setting, keeping
+        /// every other setting. <see cref="Write"/> keeps text settings too.
+        /// </summary>
+        void WriteString(string directory, string key, string? value);
     }
 }

@@ -100,5 +100,49 @@ namespace DowModManager.Tests
             Assert.Equal(service.Parse(list, GameVariant.Soulstorm), mods);
             Assert.Equal("DoWpro", Assert.Single(mods).Name);
         }
+
+        [Fact]
+        public void Detector_GogDefinitiveEdition_UsesW40kGogExe()
+        {
+            CreateDefinitiveEditionFolder();
+            File.Delete(Path.Combine(_dir, "W40k.exe"));
+            WriteFile("W40k_gog.exe");
+
+            Assert.Equal(GameVariant.DefinitiveEdition, GameVariantDetector.Detect(_dir));
+            Assert.Equal("W40k_gog.exe", GameVariantDetector.ExecutableFor(GameVariant.DefinitiveEdition, _dir));
+            Assert.True(GameVariantDetector.IsGogDefinitiveEdition(GameVariant.DefinitiveEdition, _dir));
+        }
+
+        [Fact]
+        public void Detector_SteamExeWinsOverGogExe()
+        {
+            CreateDefinitiveEditionFolder();
+            WriteFile("W40k_gog.exe");
+
+            Assert.Equal("W40k.exe", GameVariantDetector.ExecutableFor(GameVariant.DefinitiveEdition, _dir));
+            Assert.False(GameVariantDetector.IsGogDefinitiveEdition(GameVariant.DefinitiveEdition, _dir));
+        }
+
+        [Fact]
+        public void Detector_GogExeWithoutDefinitiveEditionFiles_IsNoGame()
+        {
+            WriteFile("W40k_gog.exe");
+
+            Assert.Null(GameVariantDetector.Detect(_dir));
+        }
+
+        [Fact]
+        public void LinuxLocator_ManualGogDefinitiveEdition_IsGog()
+        {
+            CreateDefinitiveEditionFolder();
+            File.Delete(Path.Combine(_dir, "W40k.exe"));
+            WriteFile("W40k_gog.exe");
+
+            var install = new DoW_Mod_Manager.Platform.Linux.LinuxGameInstallLocator().IdentifyInstall(_dir);
+
+            Assert.NotNull(install);
+            Assert.Equal("W40k_gog.exe", install!.ExecutableName);
+            Assert.Equal(GameDistribution.GoG, install.Distribution);
+        }
     }
 }

@@ -25,6 +25,12 @@
                          Text="{Binding ManualPath}" />
                 <Button Grid.Column="1" Content="Load" Margin="8,0,0,0" Command="{Binding LoadManualPathCommand}" />
             </Grid>
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsDefinitiveEdition}">
+                <TextBox Grid.Column="0" Watermark="Soulstorm folder to also list mods from (optional)"
+                         Text="{Binding SoulstormDir}"
+                         ToolTip.Tip="Lists the mods of a separate Soulstorm installation as well, so they can be used without copying them into the Definitive Edition. Leave empty and apply to stop." />
+                <Button Grid.Column="1" Content="Apply" Margin="8,0,0,0" Command="{Binding ApplySoulstormDirCommand}" />
+            </Grid>
         </StackPanel>
 
         <!-- Middle: mods + required mods -->

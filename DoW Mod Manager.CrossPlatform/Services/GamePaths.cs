@@ -1,3 +1,5 @@
+using DoW_Mod_Manager.Models;
+
 namespace DoW_Mod_Manager.Services
 {
     /// <summary>
@@ -68,23 +70,31 @@ namespace DoW_Mod_Manager.Services
         /// <summary>
         /// Directories that may hold mod <c>.module</c> files, in lookup order: the install dir, then
         /// (Definitive Edition) the Mods dir itself and each of its subfolders, since mods are
-        /// installed both as <c>Mods/X.module</c> and <c>Mods/X/X.module</c>.
+        /// installed both as <c>Mods/X.module</c> and <c>Mods/X/X.module</c>, then the optional
+        /// Soulstorm install whose mods the Definitive Edition may also use.
         /// </summary>
-        public static IReadOnlyList<string> ModuleDirectories(string installDir, string? modsDir)
+        public static IReadOnlyList<string> ModuleDirectories(string installDir, string? modsDir, string? soulstormDir = null)
         {
             var dirs = new List<string> { installDir };
-            if (string.IsNullOrEmpty(modsDir) || !Directory.Exists(modsDir))
-                return dirs;
-
-            dirs.Add(modsDir);
-            try
+            if (!string.IsNullOrEmpty(modsDir) && Directory.Exists(modsDir))
             {
-                dirs.AddRange(Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase));
+                dirs.Add(modsDir);
+                try
+                {
+                    dirs.AddRange(Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase));
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
+
+            if (!string.IsNullOrEmpty(soulstormDir) && Directory.Exists(soulstormDir))
+                dirs.Add(soulstormDir);
             return dirs;
         }
+
+        /// <inheritdoc cref="ModuleDirectories(string, string?, string?)"/>
+        public static IReadOnlyList<string> ModuleDirectories(GameInstall install) =>
+            ModuleDirectories(install.InstallDir, install.ModsDir, install.SoulstormModsDir);
 
         /// <summary>The <c>*.module</c> files (any extension casing) directly inside <paramref name="directory"/>.</summary>
         public static IReadOnlyList<string> ModuleFiles(string directory)

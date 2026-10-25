@@ -22,5 +22,10 @@ namespace DoW_Mod_Manager.Services
         public const string IsGOGVersion = "IsGOGVersion";
         public const string DXVKUpdateCheck = "DXVKUpdateCheck";
         public const string DgVoodoo2UpdateCheck = "dgVoodoo2UpdateCheck";
+
+        // Text settings (ISettingsStore.ReadString / WriteString).
+
+        /// <summary>Definitive Edition: Soulstorm folder whose mods are also listed.</summary>
+        public const string SoulstormDir = "SoulstormDir";
     }
 }

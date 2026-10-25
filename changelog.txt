@@ -11,7 +11,9 @@ Azraeht - Linux port (2.7.0.1-linux.1)
 Port versions are "<upstream base version>-linux.<N>": this release is based on upstream 2.7.0.1.
 - Added: native Linux build (.NET 8 + Avalonia) shipped as an AppImage; the game is launched through Steam/Proton, falling back to Wine
 - Added: Steam (native, Flatpak, snap) library and Proton prefix discovery instead of the Windows registry
-- Added: Definitive Edition install detection, user data dir and Mods folder
+- Added: Definitive Edition install detection (Steam W40k.exe and GOG W40k_gog.exe), user data dir and Mods folder
+- Added: Definitive Edition can also list the mods of a separate Soulstorm folder (SoulstormDir setting, as in the DE manager)
+- Changed: the port lives in "DoW Mod Manager.CrossPlatform/" next to the untouched upstream WinForms app
 - Added: DXVK and dgVoodoo2 install/update/remove on Windows and Linux (same files as upstream); on Linux the launcher sets WINEDLLOVERRIDES so Wine loads them
 - Changed: DXVK and dgVoodoo2 are mutually exclusive (both provide d3d9.dll); a failed download leaves the installed one untouched
 - Changed: LAA (4 GB) patch is never applied to 64-bit executables

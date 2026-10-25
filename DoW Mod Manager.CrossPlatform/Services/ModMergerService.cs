@@ -64,14 +64,14 @@ namespace DoW_Mod_Manager.Services
 
         /// <inheritdoc />
         public IReadOnlyList<string> GetAllModuleNames(GameInstall install) =>
-            GetAllModuleNames(install.InstallDir, install.ModsDir);
+            GetAllModuleNames(install.InstallDir, install.ModsDir, install.SoulstormModsDir);
 
-        private static List<string> GetAllModuleNames(string installDir, string? modsDir)
+        private static List<string> GetAllModuleNames(string installDir, string? modsDir, string? soulstormDir = null)
         {
             if (!Directory.Exists(installDir))
                 return [];
 
-            return GamePaths.ModuleDirectories(installDir, modsDir)
+            return GamePaths.ModuleDirectories(installDir, modsDir, soulstormDir)
                 .SelectMany(GamePaths.ModuleFiles)
                 .Select(Path.GetFileNameWithoutExtension)
                 .OfType<string>()

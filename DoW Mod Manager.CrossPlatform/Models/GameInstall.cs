@@ -67,6 +67,27 @@ public sealed class GameInstall
     /// </summary>
     public string? ModsDir { get; init; }
 
+    /// <summary>
+    /// Definitive Edition only: a Soulstorm install whose <c>*.module</c> files are also listed, so
+    /// its mods can be used without copying them (the <c>SoulstormDir</c> setting). Null otherwise.
+    /// </summary>
+    public string? SoulstormModsDir { get; init; }
+
+    /// <summary>A copy of this install with <see cref="SoulstormModsDir"/> replaced.</summary>
+    public GameInstall WithSoulstormModsDir(string? directory) => new()
+    {
+        InstallDir = InstallDir,
+        ExecutableName = ExecutableName,
+        Variant = Variant,
+        Distribution = Distribution,
+        SteamAppId = SteamAppId,
+        ProtonPrefix = ProtonPrefix,
+        SteamRoot = SteamRoot,
+        UserDataDir = _userDataDir ?? "",
+        ModsDir = ModsDir,
+        SoulstormModsDir = string.IsNullOrWhiteSpace(directory) ? null : directory
+    };
+
     public string ExecutablePath => Path.Combine(InstallDir, ExecutableName);
 
     /// <summary>

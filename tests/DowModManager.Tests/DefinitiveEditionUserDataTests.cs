@@ -286,5 +286,40 @@ namespace DowModManager.Tests
             Assert.False(File.Exists(Path.Combine(_install, "Nested_MERGED.module")));
             Assert.Contains("RequiredMod.2 = FlatMod", File.ReadAllText(written));
         }
+
+        // ------------------------------------------------------------------ Soulstorm folder
+
+        [Fact]
+        public void SoulstormModsDir_ListsItsModsLastAndResolvesTheirDependencies()
+        {
+            var soulstorm = Path.Combine(_tmp, "Dawn of War Soulstorm");
+            WriteModule(_install, "RootMod", "ModFolder = RootMod\nPlayable = 1\n");
+            WriteModule(soulstorm, "SsMod", "ModFolder = SsData\nPlayable = 1\nRequiredMod.1 = SsBase\nRequiredMod.2 = DoWDE\n");
+            WriteModule(soulstorm, "SsBase", "ModFolder = SsBaseData\n");
+            Directory.CreateDirectory(Path.Combine(soulstorm, "SsBaseData"));
+            // Soulstorm's own base modules are never listed, nor used instead of the DE ones.
+            WriteModule(soulstorm, "DXP3", "ModFolder = DXP3\nPlayable = 1\n");
+            WriteModule(soulstorm, "DoWDE", "ModFolder = NotThere\n");
+
+            var de = _de.WithSoulstormModsDir(soulstorm);
+            var mods = Mods().GetPlayableMods(de);
+
+            Assert.Equal(["RootMod", "SsMod"], mods.Select(m => m.Name));
+            Assert.DoesNotContain(Mods().GetPlayableMods(_de), m => m.Name == "SsMod");
+
+            var deps = Mods().ResolveDependencies(de, mods.Single(m => m.Name == "SsMod"));
+            Assert.All(deps, d => Assert.True(d.IsInstalled, d.RequiredModName));
+            Assert.Contains("SsBase", new ModMergerService(Mods()).GetAllModuleNames(de));
+        }
+
+        [Fact]
+        public void WithSoulstormModsDir_KeepsEverythingElse()
+        {
+            var de = _de.WithSoulstormModsDir("/games/Soulstorm");
+
+            Assert.Equal("/games/Soulstorm", de.SoulstormModsDir);
+            Assert.Equal((_de.InstallDir, _de.UserDataDir, _de.ModsDir, _de.ExecutableName), (de.InstallDir, de.UserDataDir, de.ModsDir, de.ExecutableName));
+            Assert.Null(de.WithSoulstormModsDir(" ").SoulstormModsDir);
+        }
     }
 }
