@@ -31,7 +31,8 @@ namespace DoW_Mod_Manager.Services
                 [SettingsKeys.MultithreadedJIT] = 0,
                 [SettingsKeys.AOTCompilation] = 1,
                 [SettingsKeys.IsGOGVersion] = 0,
-                [SettingsKeys.DXVKUpdateCheck] = 1
+                [SettingsKeys.DXVKUpdateCheck] = 1,
+                [SettingsKeys.DgVoodoo2UpdateCheck] = 1
             };
         }
 
@@ -109,6 +110,7 @@ namespace DoW_Mod_Manager.Services
                 case SettingsKeys.RemoveMapFog:
                 case SettingsKeys.IsGOGVersion:
                 case SettingsKeys.DXVKUpdateCheck:
+                case SettingsKeys.DgVoodoo2UpdateCheck:
                     settings[setting] = value > 0 ? value : 0;
                     break;
             }
@@ -139,7 +141,8 @@ namespace DoW_Mod_Manager.Services
                 SettingsKeys.AOTCompilation,
                 SettingsKeys.RemoveMapFog,
                 SettingsKeys.IsGOGVersion,
-                SettingsKeys.DXVKUpdateCheck
+                SettingsKeys.DXVKUpdateCheck,
+                SettingsKeys.DgVoodoo2UpdateCheck
             };
 
             // CRLF like the legacy writer: the file is shared with the Windows build.

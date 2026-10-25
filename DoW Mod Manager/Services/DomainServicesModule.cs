@@ -23,6 +23,7 @@ namespace DoW_Mod_Manager.Services
             services.AddHttpClient<IDownloadService, DownloadService>();
             services.AddSingleton<IModlistService, ModlistService>();
             services.AddSingleton<IGameExtrasService, GameExtrasService>();
+            services.AddSingleton<IGraphicsModService, GraphicsModService>();
 
             return services;
         }

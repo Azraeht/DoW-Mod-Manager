@@ -238,6 +238,47 @@ namespace DowModManager.Tests
             Assert.Contains("DOWMM_WINE", error);
         }
 
+        // ---- graphics wrapper DLL overrides -------------------------------------------------
+
+        [Fact]
+        public void DllOverrides_WineRoute_SetsWineDllOverrides()
+        {
+            var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(GogGame(), "-modname W40k",
+                Host(path: new() { ["wine"] = "/usr/bin/wine" }), out _, "d3d9,d3d8=n,b");
+
+            Assert.Equal("d3d9,d3d8=n,b", plan!.StartInfo.Environment["WINEDLLOVERRIDES"]);
+            Assert.Contains("WINEDLLOVERRIDES=d3d9,d3d8=n,b", plan.Description);
+        }
+
+        [Fact]
+        public void DllOverrides_ProtonRoute_AppendsToInheritedOverrides()
+        {
+            var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(SteamGame(), "-modname W40k",
+                Host(env: new() { ["WINEDLLOVERRIDES"] = "dinput8=n,b" }, installedProton: "/p/proton"), out _, "d3d9=n,b");
+
+            Assert.Equal(LaunchRoute.Proton, plan!.Route);
+            Assert.Equal("dinput8=n,b;d3d9=n,b", plan.StartInfo.Environment["WINEDLLOVERRIDES"]);
+        }
+
+        [Fact]
+        public void DllOverrides_InheritedValueForSameDll_IsLeftAlone()
+        {
+            var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(GogGame(), "-modname W40k",
+                Host(path: new() { ["wine"] = "/usr/bin/wine" }, env: new() { ["WINEDLLOVERRIDES"] = "d3d9=b" }), out _, "d3d9=n,b");
+
+            Assert.DoesNotContain("WINEDLLOVERRIDES", plan!.Description);
+        }
+
+        [Fact]
+        public void DllOverrides_SteamRoute_ExplainsLaunchOptions()
+        {
+            var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(SteamGame(), "-modname W40k",
+                Host(path: new() { ["steam"] = "/usr/bin/steam" }), out _, "d3d9,d3d8=n,b");
+
+            Assert.Equal(LaunchRoute.Steam, plan!.Route);
+            Assert.Contains("WINEDLLOVERRIDES=\"d3d9,d3d8=n,b\" %command%", plan.Description);
+        }
+
         // ---- run in prefix ------------------------------------------------------------------
 
         [Fact]

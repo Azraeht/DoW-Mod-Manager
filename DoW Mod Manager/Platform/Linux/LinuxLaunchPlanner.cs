@@ -166,6 +166,7 @@ public static class LinuxLaunchPlanner
     public const string WineOverrideEnv = "DOWMM_WINE";             // wine binary name or path
     public const string WinePrefixOverrideEnv = "DOWMM_WINEPREFIX"; // WINEPREFIX for the Wine route
     public const string WinePrefixEnv = "WINEPREFIX";
+    public const string DllOverridesEnv = "WINEDLLOVERRIDES";
 
     public const string SteamConfirmationHint =
         "Steam may ask you to confirm the launch arguments the first time: check the Steam window if the game does not start.";
@@ -175,9 +176,13 @@ public static class LinuxLaunchPlanner
 
     /// <summary>
     /// Builds the plan that starts <paramref name="game"/>. Returns null (with
-    /// <paramref name="error"/> set) when no route is available.
+    /// <paramref name="error"/> set) when no route is available. <paramref name="dllOverrides"/>
+    /// (e.g. <c>d3d9,d3d8=n,b</c> when DXVK or dgVoodoo2 sits in the game folder) is set as
+    /// <c>WINEDLLOVERRIDES</c> on the Proton and Wine routes. Steam does not pass our environment to
+    /// the game; its Proton already loads DXVK's DLLs as native, which picks the game-folder copies.
     /// </summary>
-    public static LaunchPlan? BuildGameLaunchPlan(GameInstall game, string arguments, LinuxLaunchHost host, out string? error)
+    public static LaunchPlan? BuildGameLaunchPlan(GameInstall game, string arguments, LinuxLaunchHost host, out string? error,
+        string? dllOverrides = null)
     {
         error = null;
         var workingDir = host.DirectoryExists(game.InstallDir) ? game.InstallDir : Environment.CurrentDirectory;
@@ -185,27 +190,32 @@ public static class LinuxLaunchPlanner
 
         // An explicit DOWMM_PROTON override always wins over going through Steam.
         var protonOverride = ResolveProtonOverride(host, notes);
+        List<string> steamNotes = dllOverrides is null
+            ? notes
+            : [.. notes, $"if the game-folder Direct3D DLLs are ignored, set the game's Steam launch options to: {DllOverridesEnv}=\"{dllOverrides}\" %command%"];
 
         if (protonOverride is null && game.Distribution == GameDistribution.Steam && game.SteamAppId is { } appId)
         {
             if (FindNativeSteam(host) is { } steam)
-                return SteamPlan(LaunchRoute.Steam, steam, [], appId, arguments, workingDir, notes);
+                return SteamPlan(LaunchRoute.Steam, steam, [], appId, arguments, workingDir, steamNotes);
 
             if (host.FindOnPath("flatpak") is { } flatpak && host.IsFlatpakSteamInstalled())
                 return SteamPlan(LaunchRoute.FlatpakSteam, flatpak, ["run", LinuxLaunchHost.FlatpakSteamAppId],
-                                 appId, arguments, workingDir, notes);
+                                 appId, arguments, workingDir, steamNotes);
 
             if (host.FindOnPath("xdg-open") is { } xdgOpen && host.HasSteamUrlHandler())
-                return SteamUrlPlan(xdgOpen, appId, arguments, workingDir, notes);
+                return SteamUrlPlan(xdgOpen, appId, arguments, workingDir, steamNotes);
         }
 
         var proton = ResolveProton(game, protonOverride, host, notes);
         if (proton is not null)
-            return ProtonPlan(game, game.ExecutablePath, proton, SplitArguments(arguments), arguments, workingDir, host, notes);
+            return WithDllOverrides(ProtonPlan(game, game.ExecutablePath, proton, SplitArguments(arguments), arguments, workingDir, host, notes),
+                                    dllOverrides, host);
 
         var wine = ResolveWine(host);
         if (wine is not null)
-            return WinePlan(game, game.ExecutablePath, wine, SplitArguments(arguments), arguments, workingDir, host, notes);
+            return WithDllOverrides(WinePlan(game, game.ExecutablePath, wine, SplitArguments(arguments), arguments, workingDir, host, notes),
+                                    dllOverrides, host);
 
         error = "No Steam client, Proton runtime or Wine binary found. "
               + $"Set {ProtonOverrideEnv} to a proton script or {WineOverrideEnv} to a wine binary."
@@ -441,6 +451,33 @@ public static class LinuxLaunchPlanner
     }
 
     // ---- helpers ----------------------------------------------------------------------------
+
+    /// <summary>
+    /// Adds <paramref name="dllOverrides"/> to the plan's <c>WINEDLLOVERRIDES</c>. An inherited value
+    /// that already mentions one of those DLLs is the user's choice and is left alone.
+    /// </summary>
+    private static LaunchPlan WithDllOverrides(LaunchPlan plan, string? dllOverrides, LinuxLaunchHost host)
+    {
+        if (dllOverrides is null)
+            return plan;
+
+        var inherited = host.GetEnvironmentVariable(DllOverridesEnv);
+        string value;
+        if (string.IsNullOrWhiteSpace(inherited))
+            value = dllOverrides;
+        else if (dllOverrides.Split('=')[0].Split(',').Any(dll => inherited.Contains(dll, StringComparison.OrdinalIgnoreCase)))
+            return plan;
+        else
+            value = inherited + ";" + dllOverrides;
+
+        plan.StartInfo.Environment[DllOverridesEnv] = value;
+        return new LaunchPlan
+        {
+            Route = plan.Route,
+            StartInfo = plan.StartInfo,
+            Description = plan.Description + $" [{DllOverridesEnv}={value}]"
+        };
+    }
 
     private static ProcessStartInfo NewStartInfo(string fileName, string workingDir) => new()
     {

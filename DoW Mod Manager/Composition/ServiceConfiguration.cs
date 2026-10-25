@@ -53,7 +53,6 @@ public static class ServiceConfiguration
         services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().Performance);
         services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().Gpu);
         services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().InstallLocator);
-        services.TryAddSingleton(sp => sp.GetRequiredService<IPlatformService>().GraphicsMods);
         return services;
     }
 

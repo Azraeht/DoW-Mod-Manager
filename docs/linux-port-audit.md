@@ -72,17 +72,19 @@ registry (`user.reg`), but this is not planned.
 
 - **DXVK** (`ModManagerForm.cs:286-301`, `1495-1513`): downloads `d3d9.dll`, `d3d8.dll` (was
   `dxgi.dll` before 2.7.0.0), `dxvk.conf` and `dxvk.version` from `raw.githubusercontent.com/IgorTheLight/…/DXVK/`
-  into the game folder. Port: Windows keeps it (`WindowsGraphicsModService`, file list updated to
-  `d3d8.dll` on this branch). **Linux: disabled** (`LinuxGraphicsModService.IsDxvkApplicable = false`)
-  because Proton already ships DXVK. Depending on the prefix's DLL overrides, a `d3d9.dll` in the
-  game folder is either ignored or loaded instead of Proton's DXVK. In the first case it does
-  nothing, and in the second it pins an older DXVK and works against Proton's.
+  into the game folder.
 - **dgVoodoo2** (new in upstream 2.7.0.0, `ModManagerForm.cs:50,328-343,1539-1556`): downloads
-  `D3D9.dll`, `dgVoodoo.conf`, `dgVoodooCpl.exe` and `dgVoodoo.version`. **Not ported.** On Linux,
-  dgVoodoo2 (D3D9→D3D11) would run *on top of* DXVK's D3D11 path and needs `d3d9=n` overrides.
-  It is possible, but it has no benefit over plain DXVK except 4:3 without stretching, and the
-  binaries are freeware, not MIT (they now sit in `DoW Mod Manager/dgVoodoo2/` from upstream).
-  Decision needed: see the plan.
+  `D3D9.dll`, `dgVoodoo.conf`, `dgVoodooCpl.exe` and `dgVoodoo.version`. Upstream does not stop
+  both being installed, although both provide `d3d9.dll`.
+- **Port (both OSes)**: `Services/GraphicsModService.cs` downloads the same files from the same
+  upstream folders, with the `DXVKUpdateCheck` / `dgVoodoo2UpdateCheck` version checks. The
+  wrappers are mutually exclusive, downloads are staged so a failure keeps the current install,
+  and other casings of a file are removed (`D3D9.dll` vs `d3d9.dll` are two files on Linux).
+  On Linux, `LinuxGameLauncher` passes `GraphicsModService.WineDllOverrides` (e.g. `d3d9,d3d8=n,b`)
+  as `WINEDLLOVERRIDES` on the Proton and Wine routes. Steam `-applaunch` cannot receive
+  environment variables; Proton's DXVK setup loads `d3d9`/`d3d8` as native, which should pick the
+  game-folder DLLs, and the launch detail tells the user which Steam launch option to add if not.
+  **Not verified on a real Proton install yet.** The dgVoodoo2 binaries are freeware, not MIT.
 
 ## 7. Updater
 
@@ -119,6 +121,6 @@ registry (`user.reg`), but this is not planned.
 1. No-fog memory patch (Soulstorm): needs an in-prefix helper.
 2. AppCompat registry flags: no Linux equivalent, hidden.
 3. CPU affinity/priority of the game: could use `taskset`/`renice` on the Wine pid. Not done.
-4. dgVoodoo2: not ported (decision pending).
+4. DXVK/dgVoodoo2 under Steam-launched Proton: relies on Proton's native override (to verify).
 5. Lutris/Heroic **discovery**: only *launching* honours `WINEPREFIX`. Discovering games from
    those launchers' configs is not implemented (see the plan).

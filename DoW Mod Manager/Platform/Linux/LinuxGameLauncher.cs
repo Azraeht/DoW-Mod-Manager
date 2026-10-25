@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DoW_Mod_Manager.Abstractions;
 using DoW_Mod_Manager.Models;
+using DoW_Mod_Manager.Services;
 
 namespace DoW_Mod_Manager.Platform.Linux;
 
@@ -84,7 +85,9 @@ public sealed class LinuxGameLauncher : IGameLauncher
 
         try
         {
-            var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(game, arguments, _host, out var error);
+            // DXVK / dgVoodoo2 in the game folder only work if Wine loads them instead of its builtins.
+            var dllOverrides = GraphicsModService.WineDllOverrides(game.InstallDir);
+            var plan = LinuxLaunchPlanner.BuildGameLaunchPlan(game, arguments, _host, out var error, dllOverrides);
             if (plan is null)
                 return Task.FromResult(new GameLaunchResult { Started = false, Detail = error });
 

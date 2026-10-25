@@ -18,7 +18,6 @@ public sealed class StubPlatformService : IPlatformService
     public ISystemPerformanceService Performance { get; } = new StubPerformanceService();
     public IGpuInfoService Gpu { get; } = new StubGpuInfoService();
     public IGameInstallLocator InstallLocator { get; } = new StubInstallLocator();
-    public IGraphicsModService GraphicsMods { get; } = new StubGraphicsModService();
     public bool IsWindows => System.OperatingSystem.IsWindows();
 }
 
@@ -63,12 +62,4 @@ internal sealed class StubInstallLocator : IGameInstallLocator
     public Task<IReadOnlyList<GameInstall>> DiscoverAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<GameInstall>>([]);
     public GameInstall? IdentifyInstall(string directory) => null;
-}
-
-internal sealed class StubGraphicsModService : IGraphicsModService
-{
-    public bool IsDxvkApplicable => false;
-    public Task<bool> IsDxvkInstalledAsync(GameInstall game, CancellationToken ct = default) => Task.FromResult(false);
-    public Task InstallDxvkAsync(GameInstall game, CancellationToken ct = default) => Task.CompletedTask;
-    public Task RemoveDxvkAsync(GameInstall game, CancellationToken ct = default) => Task.CompletedTask;
 }

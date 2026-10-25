@@ -18,7 +18,6 @@ public interface IPlatformService
     ISystemPerformanceService Performance { get; }
     IGpuInfoService Gpu { get; }
     IGameInstallLocator InstallLocator { get; }
-    IGraphicsModService GraphicsMods { get; }
 
     /// <summary>True on the Windows host. Lets ViewModels adapt without OS sniffing.</summary>
     bool IsWindows { get; }
@@ -90,13 +89,3 @@ public interface IGameInstallLocator
     GameInstall? IdentifyInstall(string directory);
 }
 
-/// <summary>DXVK / graphics mod management. Largely a no-op under Proton (DXVK is built in).</summary>
-public interface IGraphicsModService
-{
-    Task<bool> IsDxvkInstalledAsync(GameInstall game, CancellationToken ct = default);
-    Task InstallDxvkAsync(GameInstall game, CancellationToken ct = default);
-    Task RemoveDxvkAsync(GameInstall game, CancellationToken ct = default);
-
-    /// <summary>True when DXVK is meaningful on this host (false under Proton, which bundles it).</summary>
-    bool IsDxvkApplicable { get; }
-}

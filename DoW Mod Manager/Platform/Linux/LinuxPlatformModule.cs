@@ -19,7 +19,6 @@ public static class LinuxPlatformModule
         services.AddSingleton<ISystemPerformanceService, LinuxPerformanceService>();
         services.AddSingleton<IGpuInfoService, LinuxGpuInfoService>();
         services.AddSingleton<IGameInstallLocator, LinuxGameInstallLocator>();
-        services.AddSingleton<IGraphicsModService, LinuxGraphicsModService>();
 
         // Aggregate platform service composed from the registered sub-services.
         services.AddSingleton<IPlatformService>(sp => new LinuxPlatformService(
@@ -27,8 +26,7 @@ public static class LinuxPlatformModule
             sp.GetRequiredService<IFileSystemService>(),
             sp.GetRequiredService<ISystemPerformanceService>(),
             sp.GetRequiredService<IGpuInfoService>(),
-            sp.GetRequiredService<IGameInstallLocator>(),
-            sp.GetRequiredService<IGraphicsModService>()));
+            sp.GetRequiredService<IGameInstallLocator>()));
 
         return services;
     }

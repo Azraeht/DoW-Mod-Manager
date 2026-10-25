@@ -5,8 +5,7 @@ namespace DoW_Mod_Manager.Platform.Windows;
 
 /// <summary>
 /// Aggregate Windows implementation of <see cref="IPlatformService"/>. Wires together the
-/// individual Windows services (launcher, file-system, performance, GPU, install locator,
-/// graphics mods). Selected by the DI container on Windows hosts via
+/// individual Windows services (launcher, file-system, performance, GPU, install locator). Selected by the DI container on Windows hosts via
 /// <see cref="WindowsPlatformModule.AddWindowsPlatform"/>.
 /// </summary>
 [SupportedOSPlatform("windows")]
@@ -17,7 +16,6 @@ public sealed class WindowsPlatformService : IPlatformService
     public ISystemPerformanceService Performance { get; } = new WindowsPerformanceService();
     public IGpuInfoService Gpu { get; } = new WindowsGpuInfoService();
     public IGameInstallLocator InstallLocator { get; } = new WindowsGameInstallLocator();
-    public IGraphicsModService GraphicsMods { get; } = new WindowsGraphicsModService();
 
     public bool IsWindows => true;
 }

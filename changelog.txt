@@ -12,10 +12,10 @@ Port versions are "<upstream base version>-linux.<N>": this release is based on 
 - Added: native Linux build (.NET 8 + Avalonia) shipped as an AppImage; the game is launched through Steam/Proton, falling back to Wine
 - Added: Steam (native, Flatpak, snap) library and Proton prefix discovery instead of the Windows registry
 - Added: Definitive Edition install detection, user data dir and Mods folder
-- Changed: DXVK is not installed on Linux (Proton already ships it); on Windows it tracks d3d8.dll like upstream 2.7.0.0
+- Added: DXVK and dgVoodoo2 install/update/remove on Windows and Linux (same files as upstream); on Linux the launcher sets WINEDLLOVERRIDES so Wine loads them
+- Changed: DXVK and dgVoodoo2 are mutually exclusive (both provide d3d9.dll); a failed download leaves the installed one untouched
 - Changed: LAA (4 GB) patch is never applied to 64-bit executables
 - Removed: in-place .exe self-update, NGEN/JIT options (About links to this port's releases instead)
-- Not ported yet: dgVoodoo2 install (upstream 2.7.0.0)
 
 ## Version 2.7.0.1
 

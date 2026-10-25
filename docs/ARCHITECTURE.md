@@ -50,7 +50,7 @@ DoW Mod Manager/
 IPlatformService {
     IGameLauncher Launcher; IFileSystemService FileSystem;
     ISystemPerformanceService Performance; IGpuInfoService Gpu;
-    IGameInstallLocator InstallLocator; IGraphicsModService GraphicsMods;
+    IGameInstallLocator InstallLocator;
     bool IsWindows;
 }
 
@@ -73,11 +73,10 @@ IGameInstallLocator {
     GameInstall? IdentifyInstall(string directory);    // "manager in game folder" mode
 }
 
-IGraphicsModService {
-    bool IsDxvkApplicable;                              // false under Proton (built-in DXVK)
-    IsDxvkInstalledAsync / InstallDxvkAsync / RemoveDxvkAsync (GameInstall, ct)
-}
 ```
+
+`IGraphicsModService` (DXVK / dgVoodoo2) used to be a platform service. It is now a
+cross-platform domain service in `Services/` (see below), so it left `IPlatformService`.
 
 ## Models (`Models/`)
 
@@ -127,7 +126,37 @@ Secondary windows are opened through two seams so ViewModels never reference Ava
 | About | `AboutViewModel` | — |
 
 The main screen also toggles the "better camera" / "larger fonts" downloads (`IGameExtrasService`)
-and DXVK (`IGraphicsModService`, hidden under Proton).
+and the DXVK / dgVoodoo2 Direct3D wrappers (`IGraphicsModService`, same files on every OS; on
+Linux the launcher adds `WINEDLLOVERRIDES` so Wine loads them).
+
+## One manager, platform-specific features
+
+The goal is the **same application on Windows and Linux**: one code base, one Avalonia UI, the
+same windows, settings file (`DoW Mod Manager.ini`, CRLF) and downloads. Only features that
+cannot work on a host differ, and they are greyed out or explained, never hidden in a way that
+makes the two builds look like different programs.
+
+Rules:
+
+1. Feature logic lives in `Services/` and is cross-platform by default (file edits, downloads,
+   PE patching, `.module` parsing). Prefer this whenever the feature is "put files in the game folder".
+2. Only what needs OS APIs goes behind `IPlatformService` (launching, process memory, registry,
+   power plans, shortcuts, GPU enumeration). Each OS gets an implementation; unsupported
+   operations are explicit no-ops that say why.
+3. ViewModels decide what is enabled from `IPlatformService.IsWindows` (or a capability
+   property), never with `OperatingSystem.IsXxx()`.
+
+| Feature | Windows | Linux |
+|---|---|---|
+| Mod list, launch flags, Mod Merger, Mod Downloader, Settings, Fonts, camera | yes | yes |
+| Launch | `Process.Start` | Steam `-applaunch` / Proton / Wine (`LinuxLaunchPlanner`) |
+| Game discovery | game folder / manual path | Steam libraries + Proton prefixes, manual path |
+| LAA (4 GB) patch | yes (32-bit exes) | yes (32-bit exes) |
+| DXVK, dgVoodoo2 | yes | yes, plus `WINEDLLOVERRIDES` (Steam route: launch options hint) |
+| Run a mod's `Setup.exe` | directly | inside the game's Proton/Wine prefix |
+| No-fog memory patch (Soulstorm) | yes | no (process memory inside Wine) |
+| CPU affinity/priority, timer resolution, power plans, AppCompat flags | yes | no |
+| `.lnk` shortcut / `.desktop` entry | `.lnk` | `.desktop` |
 
 Game paths are resolved through `Services/GamePaths`, which matches each segment
 case-insensitively: the legacy code mixed `Data`/`data`, and files referenced by the game

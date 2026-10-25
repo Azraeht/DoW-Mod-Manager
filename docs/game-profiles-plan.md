@@ -50,7 +50,7 @@ public interface IGameProfile
 
     // --- capabilities -----------------------------------------------------
     bool LaaApplies { get; }                // Classic: true (32-bit) ; DE: false (64-bit)
-    bool DxvkApplies(bool isWindows);       // Linux: always false (Proton ships DXVK)
+    bool GraphicsWrappersApply { get; }     // DXVK / dgVoodoo2 (Direct3D 9 games): both profiles
     bool NoFogApplies(GameVariant v);       // Soulstorm only ; DE: false until verified
     bool ModulesHavePlayableFlag(GameVariant v); // false for Original/WA
     IReadOnlyList<LaunchFlag> SupportedLaunchFlags { get; } // -dev, -nomovies, -forcehighpoly, -noprecachemodels
@@ -62,8 +62,8 @@ public interface IGameProfile
 - `GameProfileRegistry` (DI singleton) lists the profiles in `DetectionPriority` order.
   `GameVariantDetector.Detect` becomes `registry.Detect(dir, appid)`.
 - **Capabilities are data, not platform code.** `LaaService` asks `profile.LaaApplies` before the PE
-  check (the PE 64-bit check stays as a safety net). `IGraphicsModService` asks
-  `profile.DxvkApplies(isWindows)`. The launcher builds arguments from `SupportedLaunchFlags`.
+  check (the PE 64-bit check stays as a safety net). The DXVK / dgVoodoo2 buttons ask
+  `profile.GraphicsWrappersApply`. The launcher builds arguments from `SupportedLaunchFlags`.
 - **Adding a game = adding one class.** For example, `DefinitiveEditionProfile.cs` + tests, without
   touching the launcher, locator or view models.
 
@@ -78,7 +78,7 @@ public interface IGameProfile
 | `.module` dirs | install dir | install dir + `<UserData>/Mods` |
 | User data | install dir | `%APPDATA%\Relic Entertainment\Dawn of War` → on Linux `compatdata/3556750/pfx/drive_c/users/steamuser/AppData/Roaming/…` |
 | LAA | yes (Steam vs GOG variant of the patch, as upstream) | no |
-| DXVK installer | Windows only | Windows: open question (see the decisions below); Linux: no |
+| DXVK / dgVoodoo2 | yes, Windows and Linux | yes, Windows and Linux (upstream's DE manager offers both) |
 | No-fog | Soulstorm only, Windows only | no |
 | Mod list section | per variant | Soulstorm section (current behaviour, to confirm) |
 
@@ -108,9 +108,8 @@ route should run the launcher's own Wine build. Plain `wine` from PATH is only t
 
 ## DXVK, dgVoodoo2, no-fog on Linux
 
-- DXVK installer: hidden on Linux (Proton ships DXVK). Keep the Windows path.
-- dgVoodoo2 (upstream 2.7.0.0): not ported. On Linux it would stack D3D9→D3D11 on top of DXVK, and its
-  binaries are freeware, not MIT. Recommended: Windows-only, later, behind the same `IGraphicsModService`.
+- DXVK and dgVoodoo2: done on both OSes (`Services/GraphicsModService.cs`). On Linux, Wine DLL
+  overrides come from the launcher. Remaining work is QA on a real Steam + Proton install.
 - No-fog: write process memory from *inside* the prefix with a tiny helper `.exe` run through
   `RunInGamePrefixAsync`. Low priority.
 
@@ -130,7 +129,7 @@ route should run the launcher's own Wine build. Plain `wine` from PATH is only t
 1. **Use the 1.x DE manager source?** It is MIT and public (`upstream/DE`), not closed. Reading it
    would settle DE details (mod list section, settings, DXVK for DE) quickly, with attribution kept.
    This plan currently follows your "do not copy" rule.
-2. **DXVK for DE on Windows**: the public DE branch ships a `DXVK/` folder, so upstream offers it for DE.
-   Keep `DxvkApplies` true for DE on Windows?
-3. **dgVoodoo2**: port it (Windows-only) or skip it?
-4. **Heroic/Lutris/Bottles**: which launchers are in scope for P3?
+2. **Heroic/Lutris/Bottles**: which launchers are in scope for P3?
+
+Settled: DXVK and dgVoodoo2 are ported on both OSes for every profile. The manager stays one
+cross-platform application, with per-OS features listed in `docs/ARCHITECTURE.md`.

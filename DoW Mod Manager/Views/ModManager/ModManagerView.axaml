@@ -92,7 +92,9 @@
                 <Button Content="{Binding CameraLabel}" Margin="0,0,8,0" Command="{Binding ToggleCameraCommand}" />
                 <Button Content="{Binding LargerFontsLabel}" Margin="0,0,8,0" Command="{Binding ToggleLargerFontsCommand}" />
                 <Button Content="{Binding DxvkLabel}" Margin="0,0,8,0" Command="{Binding ToggleDxvkCommand}"
-                        IsVisible="{Binding DxvkApplicable}" />
+                        ToolTip.Tip="{Binding GraphicsWrapperHint}" />
+                <Button Content="{Binding DgVoodoo2Label}" Margin="0,0,8,0" Command="{Binding ToggleDgVoodoo2Command}"
+                        ToolTip.Tip="{Binding GraphicsWrapperHint}" />
                 <Button Content="About" Command="{Binding OpenAboutCommand}" />
             </WrapPanel>
             <Border Background="#1AFFFFFF" CornerRadius="4" Padding="8" MinHeight="48">

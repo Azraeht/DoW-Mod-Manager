@@ -5,7 +5,7 @@ namespace DoW_Mod_Manager.Platform.Linux;
 /// <summary>
 /// Aggregate <see cref="IPlatformService"/> for Linux hosts. Wires the Proton/Wine launcher,
 /// Steam install discovery, xdg/.desktop file operations, GPU enumeration and the no-op
-/// performance / DXVK services. Selected by the DI container via
+/// performance service. Selected by the DI container via
 /// <see cref="LinuxPlatformModule.AddLinuxPlatform"/> on non-Windows hosts.
 /// </summary>
 public sealed class LinuxPlatformService : IPlatformService
@@ -15,7 +15,6 @@ public sealed class LinuxPlatformService : IPlatformService
     public ISystemPerformanceService Performance { get; }
     public IGpuInfoService Gpu { get; }
     public IGameInstallLocator InstallLocator { get; }
-    public IGraphicsModService GraphicsMods { get; }
 
     public bool IsWindows => false;
 
@@ -25,8 +24,7 @@ public sealed class LinuxPlatformService : IPlatformService
                new LinuxFileSystemService(),
                new LinuxPerformanceService(),
                new LinuxGpuInfoService(),
-               new LinuxGameInstallLocator(),
-               new LinuxGraphicsModService())
+               new LinuxGameInstallLocator())
     {
     }
 
@@ -36,14 +34,12 @@ public sealed class LinuxPlatformService : IPlatformService
         IFileSystemService fileSystem,
         ISystemPerformanceService performance,
         IGpuInfoService gpu,
-        IGameInstallLocator installLocator,
-        IGraphicsModService graphicsMods)
+        IGameInstallLocator installLocator)
     {
         Launcher = launcher;
         FileSystem = fileSystem;
         Performance = performance;
         Gpu = gpu;
         InstallLocator = installLocator;
-        GraphicsMods = graphicsMods;
     }
 }

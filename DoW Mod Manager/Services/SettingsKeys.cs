@@ -21,5 +21,6 @@ namespace DoW_Mod_Manager.Services
         public const string AOTCompilation = "AOTCompilation";
         public const string IsGOGVersion = "IsGOGVersion";
         public const string DXVKUpdateCheck = "DXVKUpdateCheck";
+        public const string DgVoodoo2UpdateCheck = "dgVoodoo2UpdateCheck";
     }
 }

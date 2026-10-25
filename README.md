@@ -83,8 +83,15 @@ Mod Downloader to run one inside the game's Proton prefix, and point it at the g
 folder.
 
 Not available on Linux: CPU affinity, in-memory fog removal, timer resolution and power plans
-(greyed out), and DXVK management (Proton already ships DXVK). The 4 GB patch is disabled for
-the 64-bit Definitive Edition executable, which does not need it.
+(greyed out). The 4 GB patch is disabled for the 64-bit Definitive Edition executable, which
+does not need it.
+
+DXVK and dgVoodoo2 work on Linux too. Proton already ships DXVK, so this is optional: the
+buttons put upstream's tested DXVK build (or dgVoodoo2) in the game folder, and it is loaded
+instead of Proton's own. When the manager starts the game through Proton or Wine itself, it sets
+`WINEDLLOVERRIDES` for you. When it goes through Steam, Proton normally picks the game-folder DLLs
+on its own; if it does not, add `WINEDLLOVERRIDES="d3d9,d3d8=n,b" %command%` to the game's Steam
+launch options. DXVK and dgVoodoo2 both provide `d3d9.dll`, so installing one removes the other.
 
 > Building from source: `dotnet publish "DoW Mod Manager/DowModManager.csproj" -f net8.0 -r
 > linux-x64 --self-contained -p:PublishSingleFile=true -o artifacts/linux-x64`, then

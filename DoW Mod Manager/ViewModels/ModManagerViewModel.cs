@@ -54,7 +54,7 @@ public partial class ModManagerViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ToggleLaaCommand))]
     [ObservableProperty] private bool _laaApplicable;
 
-    // Optional game tweaks (legacy camera / larger fonts / DXVK buttons).
+    // Optional game tweaks (legacy camera / larger fonts / DXVK / dgVoodoo2 buttons).
     [NotifyPropertyChangedFor(nameof(CameraLabel))]
     [ObservableProperty] private bool _isCameraInstalled;
 
@@ -62,11 +62,22 @@ public partial class ModManagerViewModel : ViewModelBase
     [ObservableProperty] private bool _isLargerFontsInstalled;
 
     [NotifyPropertyChangedFor(nameof(DxvkLabel))]
-    [ObservableProperty] private bool _isDxvkInstalled;
+    [ObservableProperty] private GraphicsWrapperState _dxvkState;
+
+    [NotifyPropertyChangedFor(nameof(DgVoodoo2Label))]
+    [ObservableProperty] private GraphicsWrapperState _dgVoodoo2State;
 
     public string CameraLabel => IsCameraInstalled ? "Remove better camera" : "Install better camera";
     public string LargerFontsLabel => IsLargerFontsInstalled ? "Remove larger fonts" : "Install larger fonts";
-    public string DxvkLabel => IsDxvkInstalled ? "Remove DXVK" : "Install DXVK";
+    public string DxvkLabel => WrapperLabel(DxvkState, "DXVK", "Remove");
+    public string DgVoodoo2Label => WrapperLabel(DgVoodoo2State, "dgVoodoo2", "Delete");
+
+    private static string WrapperLabel(GraphicsWrapperState state, string name, string removeVerb) => state switch
+    {
+        GraphicsWrapperState.Installed => $"{removeVerb} {name}",
+        GraphicsWrapperState.UpdateAvailable => $"Update {name}",
+        _ => $"Install {name}"
+    };
 
     // Launch options (persisted to DoW Mod Manager.ini).
     [ObservableProperty] private bool _dev;
@@ -91,8 +102,14 @@ public partial class ModManagerViewModel : ViewModelBase
 
     public bool PerfTweaksSupported => _platform.IsWindows;
 
-    /// <summary>DXVK is bundled with Proton on Linux, so the toggle only shows on Windows.</summary>
-    public bool DxvkApplicable => _graphics.IsDxvkApplicable;
+    /// <summary>
+    /// Tooltip of the DXVK / dgVoodoo2 buttons. On Linux the files replace Proton's own DXVK: the
+    /// launcher adds the Wine DLL overrides for the direct Proton/Wine routes, Steam's Proton loads
+    /// game-folder DLLs on its own.
+    /// </summary>
+    public string GraphicsWrapperHint => _platform.IsWindows
+        ? "Drops the wrapper DLLs into the game folder. DXVK and dgVoodoo2 both provide d3d9.dll, so installing one removes the other."
+        : "Drops the wrapper DLLs into the game folder; they take precedence over Proton's built-in DXVK. DXVK and dgVoodoo2 both provide d3d9.dll, so installing one removes the other.";
 
     public ModManagerViewModel(
         IPlatformService platform,
@@ -492,17 +509,25 @@ public partial class ModManagerViewModel : ViewModelBase
 
     // ------------------------------------------------------------------ optional tweaks
 
-    private async Task RefreshExtrasAsync(GameInstall install)
+    private async Task RefreshExtrasAsync(GameInstall install, bool checkForUpdates = true)
     {
         IsCameraInstalled = _extras.IsCameraInstalled(install.InstallDir);
         IsLargerFontsInstalled = _extras.IsLargerFontsInstalled(install.InstallDir);
-        try
+
+        var s = _settings.Read(install.InstallDir);
+        DxvkState = await WrapperStateAsync(GraphicsWrapper.Dxvk, s[SettingsKeys.DXVKUpdateCheck] == 1);
+        DgVoodoo2State = await WrapperStateAsync(GraphicsWrapper.DgVoodoo2, s[SettingsKeys.DgVoodoo2UpdateCheck] == 1);
+
+        async Task<GraphicsWrapperState> WrapperStateAsync(GraphicsWrapper wrapper, bool updateCheck)
         {
-            IsDxvkInstalled = DxvkApplicable && await _graphics.IsDxvkInstalledAsync(install);
-        }
-        catch
-        {
-            IsDxvkInstalled = false;
+            try
+            {
+                return await _graphics.GetStateAsync(install.InstallDir, wrapper, checkForUpdates && updateCheck);
+            }
+            catch
+            {
+                return GraphicsWrapperState.NotInstalled;
+            }
         }
     }
 
@@ -518,13 +543,22 @@ public partial class ModManagerViewModel : ViewModelBase
         dir => _extras.InstallLargerFontsAsync(dir),
         dir => { _extras.RemoveLargerFonts(dir); return Task.CompletedTask; });
 
+    // As in the legacy buttons, "Update" re-downloads (installed == false) and "Remove" deletes.
     [RelayCommand]
     private Task ToggleDxvkAsync() => ToggleExtraAsync(
-        IsDxvkInstalled, "DXVK",
-        _ => _graphics.InstallDxvkAsync(SelectedInstall!),
-        _ => _graphics.RemoveDxvkAsync(SelectedInstall!));
+        DxvkState == GraphicsWrapperState.Installed, "DXVK",
+        dir => _graphics.InstallAsync(dir, GraphicsWrapper.Dxvk),
+        dir => { _graphics.Remove(dir, GraphicsWrapper.Dxvk); return Task.CompletedTask; });
 
-    private async Task ToggleExtraAsync(bool installed, string name, Func<string, Task> install, Func<string, Task> remove)
+    [RelayCommand]
+    private Task ToggleDgVoodoo2Async() => ToggleExtraAsync(
+        DgVoodoo2State == GraphicsWrapperState.Installed, "dgVoodoo2",
+        dir => _graphics.InstallAsync(dir, GraphicsWrapper.DgVoodoo2),
+        dir => { _graphics.Remove(dir, GraphicsWrapper.DgVoodoo2); return Task.CompletedTask; },
+        "Best way to use it: in Settings > Video disable antialiasing and pick 1280x960 or 1024x768, so the UI is not stretched.");
+
+    private async Task ToggleExtraAsync(bool installed, string name, Func<string, Task> install, Func<string, Task> remove,
+        string? installedHint = null)
     {
         if (SelectedInstall is null || Busy)
             return;
@@ -542,7 +576,7 @@ public partial class ModManagerViewModel : ViewModelBase
             {
                 Status = $"Downloading {name}…";
                 await install(game.InstallDir);
-                Status = $"The {name} tweak is downloaded and enabled.";
+                Status = $"The {name} tweak is downloaded and enabled." + (installedHint is null ? "" : " " + installedHint);
             }
         }
         catch (Exception ex)
@@ -552,7 +586,7 @@ public partial class ModManagerViewModel : ViewModelBase
         finally
         {
             Busy = false;
-            await RefreshExtrasAsync(game);
+            await RefreshExtrasAsync(game, checkForUpdates: false);
         }
     }
 }
