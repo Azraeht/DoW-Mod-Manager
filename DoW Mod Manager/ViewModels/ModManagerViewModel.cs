@@ -46,6 +46,10 @@ public partial class ModManagerViewModel : ViewModelBase
     [ObservableProperty] private string _status = "Discovering Dawn of War installations…";
     [ObservableProperty] private string _laaStatus = "";
 
+    /// <summary>False for 64-bit (Definitive Edition) or unreadable executables — the toggle is disabled.</summary>
+    [NotifyCanExecuteChangedFor(nameof(ToggleLaaCommand))]
+    [ObservableProperty] private bool _laaApplicable;
+
     // Optional game tweaks (legacy camera / larger fonts / DXVK buttons).
     [NotifyPropertyChangedFor(nameof(CameraLabel))]
     [ObservableProperty] private bool _isCameraInstalled;
@@ -322,10 +326,10 @@ public partial class ModManagerViewModel : ViewModelBase
             : "No fatal errors found in warnings.log.";
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(LaaApplicable))]
     private void ToggleLaa()
     {
-        if (SelectedInstall is null)
+        if (SelectedInstall is null || !LaaApplicable)
             return;
 
         try
@@ -333,6 +337,11 @@ public partial class ModManagerViewModel : ViewModelBase
             bool now = _laa.ToggleLAA(SelectedInstall.ExecutablePath, IsGogVersion);
             LaaStatus = now ? "LAA: Enabled" : "LAA: Disabled";
             Status = $"Large-Address-Aware {(now ? "enabled" : "disabled")} for {SelectedInstall.ExecutableName}.";
+        }
+        catch (LaaNotApplicableException ex)
+        {
+            Status = ex.Message;
+            RefreshLaaStatus(SelectedInstall);
         }
         catch (Exception ex)
         {
@@ -342,6 +351,22 @@ public partial class ModManagerViewModel : ViewModelBase
 
     private void RefreshLaaStatus(GameInstall install)
     {
+        var applicability = _laa.GetLaaApplicability(install.ExecutablePath);
+        LaaApplicable = applicability == LaaApplicability.Applicable;
+
+        switch (applicability)
+        {
+            case LaaApplicability.NotNeeded64Bit:
+                LaaStatus = "LAA: not needed (64-bit)";
+                return;
+            case LaaApplicability.UnsupportedImage:
+                LaaStatus = "LAA: n/a (not a 32-bit exe)";
+                return;
+            case LaaApplicability.FileUnavailable:
+                LaaStatus = "LAA: unknown";
+                return;
+        }
+
         try
         {
             bool aware = _laa.IsLargeAddressAware(install.ExecutablePath, IsGogVersion);
@@ -349,6 +374,7 @@ public partial class ModManagerViewModel : ViewModelBase
         }
         catch
         {
+            LaaApplicable = false;
             LaaStatus = "LAA: unknown";
         }
     }

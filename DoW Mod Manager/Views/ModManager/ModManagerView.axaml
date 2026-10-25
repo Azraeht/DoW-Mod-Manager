@@ -81,7 +81,9 @@
                         Command="{Binding OpenModFolderCommand}" />
                 <Button Content="Check for errors" Margin="0,0,8,0"
                         Command="{Binding CheckForErrorsCommand}" />
-                <Button Content="Toggle LAA" Command="{Binding ToggleLaaCommand}" />
+                <Button Content="Toggle LAA" Command="{Binding ToggleLaaCommand}"
+                        ToolTip.ShowOnDisabled="True"
+                        ToolTip.Tip="Toggle the 4 GB RAM (Large Address Aware) patch. Only applies to 32-bit game executables; 64-bit ones (Definitive Edition) don't need it." />
             </WrapPanel>
             <WrapPanel>
                 <Button Content="Mod Downloader" Margin="0,0,8,0" Command="{Binding OpenModDownloaderCommand}" />

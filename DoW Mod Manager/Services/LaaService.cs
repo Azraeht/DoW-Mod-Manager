@@ -1,11 +1,19 @@
-using System.Text;
+using System.Buffers.Binary;
 
 namespace DoW_Mod_Manager.Services
 {
     /// <summary>
-    /// Verbatim port of the legacy <c>LAATweaks</c> (Steam) and <c>LAATweaksOld</c> (GOG)
+    /// Port of the legacy <c>LAATweaks</c> (Steam) and <c>LAATweaksOld</c> (GOG)
     /// Large-Address-Aware patching. WinForms message boxes from the originals are dropped;
-    /// the byte offsets, checksum logic and toggle semantics are preserved exactly.
+    /// the byte offsets, checksum logic and toggle semantics on a valid 32-bit executable are
+    /// preserved exactly.
+    /// <para>
+    /// Hardening over the legacy code: the PE header is fully validated (bounds-checked, PE32 /
+    /// x86 only) before anything is written, so 64-bit images (Dawn of War: Definitive Edition),
+    /// truncated or foreign files are never modified; the new flag and checksum are computed in
+    /// memory and only then written, so a failure can no longer leave the flag patched without its
+    /// checksum; a locked / read-only file is reported as an <see cref="IOException"/>.
+    /// </para>
     /// </summary>
     public sealed class LaaService : ILaaService
     {
@@ -18,144 +26,228 @@ namespace DoW_Mod_Manager.Services
         private const short MZ_HEADER = 0x5A4D;
         private const int PE_HEADER_SIGNATURE = 0x4550;
 
+        private const ushort IMAGE_FILE_MACHINE_I386 = 0x014C;
+        private const ushort IMAGE_FILE_MACHINE_IA64 = 0x0200;
+        private const ushort IMAGE_FILE_MACHINE_AMD64 = 0x8664;
+        private const ushort IMAGE_FILE_MACHINE_ARM64 = 0xAA64;
+        private const ushort IMAGE_NT_OPTIONAL_HDR32_MAGIC = 0x10B;
+        private const ushort IMAGE_NT_OPTIONAL_HDR64_MAGIC = 0x20B;
+
+        // Offsets relative to the PE signature (e_lfanew), shared by both legacy algorithms.
+        private const int E_LFANEW_OFFSET = 0x3C;
+        private const int MACHINE_OFFSET = 0x04;
+        private const int CHARACTERISTICS_OFFSET = 0x16;   // LAA flag lives here.
+        private const int OPTIONAL_MAGIC_OFFSET = 0x18;
+        private const int CHECKSUM_OFFSET = 0x18 + 0x40;   // Optional header start + 0x40.
+        private const int CHECKSUM_FIELD_SIZE = 4;
+
+        // A DoW executable is ~10 MB; refuse anything absurd rather than buffering it.
+        private const long MAX_EXE_SIZE = 512L * 1024 * 1024;
+
+        /// <inheritdoc />
+        public LaaApplicability GetLaaApplicability(string exePath)
+        {
+            try
+            {
+                using FileStream fs = File.OpenRead(exePath);
+                return ReadHeader(fs).Applicability;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                           or ArgumentException or NotSupportedException)
+            {
+                return LaaApplicability.FileUnavailable;
+            }
+        }
+
+        /// <inheritdoc />
+        public bool IsLaaApplicable(string exePath) =>
+            GetLaaApplicability(exePath) == LaaApplicability.Applicable;
+
         /// <inheritdoc />
         public bool IsLargeAddressAware(string exePath, bool gogVersion)
         {
-            return gogVersion ? IsLargeAwareGog(exePath) : IsLargeAwareSteam(exePath);
+            // Both legacy algorithms (IsLargeAware in LAATweaks and LAATweaksOld) read the same
+            // 16-bit COFF Characteristics field at e_lfanew + 0x16 and test bit 0x20. That field has
+            // the same position in PE32+, so the answer is also correct for 64-bit images.
+            using FileStream fs = File.OpenRead(exePath);
+            PeHeader header = ReadHeader(fs);
+            if (header.Applicability == LaaApplicability.UnsupportedImage)
+                return false;
+
+            return (header.Characteristics & LAA_FLAG) == LAA_FLAG;
         }
 
         /// <inheritdoc />
         public bool ToggleLAA(string exePath, bool gogVersion)
         {
-            return gogVersion ? ToggleLaaGog(exePath) : ToggleLaaSteam(exePath);
+            LaaApplicability applicability = GetLaaApplicability(exePath);
+            if (applicability != LaaApplicability.Applicable)
+                throw new LaaNotApplicableException(exePath, applicability);
+
+            using FileStream fs = OpenForPatching(exePath);
+
+            // Re-validate on the handle we will write through (the file may have changed).
+            PeHeader header = ReadHeader(fs);
+            if (header.Applicability != LaaApplicability.Applicable)
+                throw new LaaNotApplicableException(exePath, header.Applicability);
+
+            return gogVersion ? ToggleLaaGog(fs, header.PeOffset) : ToggleLaaSteam(fs, header.PeOffset);
+        }
+
+        // ----------------------------------------------------------------------------------
+        // Header validation
+        // ----------------------------------------------------------------------------------
+
+        private readonly record struct PeHeader(LaaApplicability Applicability, long PeOffset, short Characteristics);
+
+        private static PeHeader ReadHeader(Stream s)
+        {
+            static PeHeader Unsupported() => new(LaaApplicability.UnsupportedImage, -1, 0);
+
+            long length = s.Length;
+            if (length < E_LFANEW_OFFSET + 4)
+                return Unsupported();
+
+            Span<byte> buf = stackalloc byte[4];
+
+            if (!ReadAt(s, 0, buf[..2]) || BinaryPrimitives.ReadInt16LittleEndian(buf) != MZ_HEADER)
+                return Unsupported();
+
+            if (!ReadAt(s, E_LFANEW_OFFSET, buf))
+                return Unsupported();
+            long pe = BinaryPrimitives.ReadInt32LittleEndian(buf);
+
+            // Must at least reach the optional header magic.
+            if (pe <= 0 || pe + OPTIONAL_MAGIC_OFFSET + 2 > length)
+                return Unsupported();
+
+            if (!ReadAt(s, pe, buf) || BinaryPrimitives.ReadInt32LittleEndian(buf) != PE_HEADER_SIGNATURE)
+                return Unsupported();
+
+            if (!ReadAt(s, pe + MACHINE_OFFSET, buf[..2]))
+                return Unsupported();
+            ushort machine = BinaryPrimitives.ReadUInt16LittleEndian(buf);
+
+            if (!ReadAt(s, pe + CHARACTERISTICS_OFFSET, buf[..2]))
+                return Unsupported();
+            short characteristics = BinaryPrimitives.ReadInt16LittleEndian(buf);
+
+            if (!ReadAt(s, pe + OPTIONAL_MAGIC_OFFSET, buf[..2]))
+                return Unsupported();
+            ushort magic = BinaryPrimitives.ReadUInt16LittleEndian(buf);
+
+            if (magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC
+                || machine is IMAGE_FILE_MACHINE_AMD64 or IMAGE_FILE_MACHINE_ARM64 or IMAGE_FILE_MACHINE_IA64)
+                return new PeHeader(LaaApplicability.NotNeeded64Bit, pe, characteristics);
+
+            if (machine != IMAGE_FILE_MACHINE_I386 || magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+                return Unsupported();
+
+            // The (legacy 16-bit) checksum write must land inside the file.
+            if (pe + CHECKSUM_OFFSET + CHECKSUM_FIELD_SIZE > length || length > MAX_EXE_SIZE)
+                return Unsupported();
+
+            return new PeHeader(LaaApplicability.Applicable, pe, characteristics);
+        }
+
+        private static bool ReadAt(Stream s, long pos, Span<byte> dest)
+        {
+            if (pos < 0 || pos + dest.Length > s.Length)
+                return false;
+            s.Seek(pos, SeekOrigin.Begin);
+            s.ReadExactly(dest);
+            return true;
+        }
+
+        private static FileStream OpenForPatching(string exePath)
+        {
+            try
+            {
+                return File.Open(exePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new IOException(
+                    $"{Path.GetFileName(exePath)} is read-only or you lack permission to modify it.", ex);
+            }
+            catch (IOException ex) when (ex is not FileNotFoundException and not DirectoryNotFoundException)
+            {
+                throw new IOException(
+                    $"{Path.GetFileName(exePath)} is in use (is the game running?) and cannot be modified.", ex);
+            }
+        }
+
+        private static byte[] ReadAll(FileStream fs)
+        {
+            var data = new byte[fs.Length];
+            fs.Seek(0, SeekOrigin.Begin);
+            fs.ReadExactly(data);
+            return data;
+        }
+
+        private static void WriteAt(FileStream fs, long pos, ReadOnlySpan<byte> bytes)
+        {
+            fs.Seek(pos, SeekOrigin.Begin);
+            fs.Write(bytes);
         }
 
         // ----------------------------------------------------------------------------------
         // Steam variant — port of LAATweaks.cs
         // ----------------------------------------------------------------------------------
 
-        private static bool IsLargeAwareSteam(string file)
+        private static bool ToggleLaaSteam(FileStream fs, long peHeaderPos)
         {
-            using FileStream fs = File.OpenRead(file);
-            using BinaryReader br = new(fs);
+            byte[] data = ReadAll(fs);
 
-            if (!IsValidExecutable(br)) return false;
+            long laaFlagPos = peHeaderPos + CHARACTERISTICS_OFFSET;
+            long checksumPos = peHeaderPos + CHECKSUM_OFFSET;
 
-            long peHeaderPos = GetPEHeaderPosition(br);
-            if (peHeaderPos == -1) return false;
-
-            long laaFlagPos = GetLAAFlagPosition(br, peHeaderPos);
-            if (laaFlagPos == -1) return false;
-
-            short laaFlag = br.ReadInt16();
-
-            // Check if the LAA flag is set.
-            return (laaFlag & LAA_FLAG) == LAA_FLAG;
-        }
-
-        private static bool ToggleLaaSteam(string file)
-        {
-            using FileStream fs = File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-            using BinaryReader br = new(fs);
-            using BinaryWriter bw = new(fs);
-
-            if (!IsValidExecutable(br)) return false;
-
-            long peHeaderPos = GetPEHeaderPosition(br);
-            if (peHeaderPos == -1) return false;
-
-            long laaFlagPos = GetLAAFlagPosition(br, peHeaderPos);
-            if (laaFlagPos == -1) return false;
-
-            short laaFlag = br.ReadInt16();
-
-            long checksumPos = GetChecksumPosition(br, peHeaderPos);
-            if (checksumPos == -1) return false;
-
-            // Read original checksum (preserved to mirror legacy behaviour).
-            _ = br.ReadInt16();
+            short laaFlag = BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan((int)laaFlagPos));
 
             bool isLAASet = (laaFlag & LAA_FLAG) == LAA_FLAG;
             laaFlag = ToggleFlag(laaFlag, LAA_FLAG);
 
-            // Write updated LAA flag.
-            bw.Seek((int)laaFlagPos, SeekOrigin.Begin);
-            bw.Write(laaFlag);
+            // Legacy wrote the flag first and then checksummed the file including it; do the same
+            // in memory so nothing hits the disk until both values are known.
+            BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan((int)laaFlagPos), laaFlag);
 
-            // Calculate and write new checksum.
-            uint newChecksum = CalculatePEChecksum(fs, checksumPos);
-            bw.Seek((int)checksumPos, SeekOrigin.Begin);
-            bw.Write((short)newChecksum); // Writing lower 16 bits (checksum field is 16 bits).
+            uint newChecksum = CalculatePEChecksum(data, checksumPos);
+
+            Span<byte> flagBytes = stackalloc byte[2];
+            Span<byte> sumBytes = stackalloc byte[2];
+            BinaryPrimitives.WriteInt16LittleEndian(flagBytes, laaFlag);
+            BinaryPrimitives.WriteInt16LittleEndian(sumBytes, (short)newChecksum); // Lower 16 bits only (legacy).
+
+            WriteAt(fs, laaFlagPos, flagBytes);
+            WriteAt(fs, checksumPos, sumBytes);
+            fs.Flush(flushToDisk: true);
 
             return !isLAASet;
         }
 
-        private static long GetPEHeaderPosition(BinaryReader br)
-        {
-            br.BaseStream.Seek(0x3C, SeekOrigin.Begin);
-            int peHeaderOffset = br.ReadInt32(); // Location of PE header (at 0x3C in MZ header).
-
-            br.BaseStream.Seek(peHeaderOffset, SeekOrigin.Begin);
-            if (br.ReadInt32() == 0x4550)  // PE signature (0x4550 = "PE\0\0").
-                return peHeaderOffset;
-
-            return -1;  // PE header not found.
-        }
-
-        private static long GetLAAFlagPosition(BinaryReader br, long peHeaderPos)
-        {
-            br.BaseStream.Seek(peHeaderPos + 0x4, SeekOrigin.Begin);  // Skip to COFF header.
-            _ = br.ReadInt16(); // Machine type (not used here).
-            _ = br.ReadInt16(); // Number of sections (not used here).
-
-            // The Characteristics field (where the LAA flag is located) is at offset 0x16
-            // from the PE header.
-            br.BaseStream.Seek(peHeaderPos + 0x16, SeekOrigin.Begin);
-            return br.BaseStream.Position;
-        }
-
-        private static long GetChecksumPosition(BinaryReader br, long peHeaderPos)
-        {
-            br.BaseStream.Seek(peHeaderPos + 0x14, SeekOrigin.Begin);  // Skip to Optional Header start.
-            _ = br.ReadInt16();  // Size of Optional Header.
-
-            // The checksum field is at offset 0x40 from the beginning of the Optional Header.
-            long checksumPos = peHeaderPos + 0x18 + 0x40;
-            if (checksumPos < br.BaseStream.Length)
-            {
-                br.BaseStream.Seek(checksumPos, SeekOrigin.Begin);
-                return checksumPos;
-            }
-
-            return -1;  // Checksum position not found.
-        }
-
-        private static uint CalculatePEChecksum(FileStream fs, long checksumPos)
+        /// <summary>
+        /// Exact replica of the legacy <c>LAATweaks.CalculatePEChecksum</c> stream walk, run over an
+        /// in-memory copy. The only deviation is a lone trailing byte (odd file length), where the
+        /// legacy <c>ReadUInt16</c> threw after the flag had already been written; it is now added
+        /// as a zero-extended word.
+        /// </summary>
+        private static uint CalculatePEChecksum(byte[] data, long checksumPos)
         {
             uint checksum = 0;
-            long fileSize = fs.Length;
+            long fileSize = data.LongLength;
 
-            // Save the current position to restore later.
-            long originalPos = fs.Position;
-
-            fs.Seek(0, SeekOrigin.Begin);  // Start from the beginning of the file.
-
-            using (BinaryReader br = new(fs, Encoding.Default, leaveOpen: true))
+            for (long i = 0; i < fileSize; i += 4)
             {
-                for (long i = 0; i < fileSize; i += 4)
-                {
-                    if (i == checksumPos)
-                    {
-                        br.BaseStream.Seek(4, SeekOrigin.Current); // Skip the checksum field itself (4 bytes).
-                        continue;
-                    }
+                if (i == checksumPos)
+                    continue; // Skip the checksum field itself (4 bytes).
 
-                    // Add 32-bit words to checksum.
-                    if (i + 4 <= fileSize)
-                        checksum += br.ReadUInt32();
-                    else
-                        checksum += br.ReadUInt16(); // Handle remaining bytes.
-                }
+                // Add 32-bit words to checksum.
+                if (i + 4 <= fileSize)
+                    checksum += BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan((int)i, 4));
+                else if (i + 2 <= fileSize)
+                    checksum += BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan((int)i, 2)); // Remaining bytes.
+                else
+                    checksum += data[i];
             }
 
             // Add file length to the checksum.
@@ -165,21 +257,7 @@ namespace DoW_Mod_Manager.Services
             checksum = (checksum & 0xFFFF) + (checksum >> 16);
             checksum += (checksum >> 16);
 
-            // Restore the original file position.
-            fs.Seek(originalPos, SeekOrigin.Begin);
-
             return checksum & 0xFFFF; // Return a 16-bit checksum.
-        }
-
-        private static bool IsValidExecutable(BinaryReader br)
-        {
-            if (br.ReadInt16() != MZ_HEADER) return false;
-
-            br.BaseStream.Position = 0x3C;
-            int peHeaderLoc = br.ReadInt32();
-
-            br.BaseStream.Position = peHeaderLoc;
-            return br.ReadInt32() == PE_HEADER_SIGNATURE;
         }
 
         private static short ToggleFlag(short value, short flag)
@@ -191,75 +269,37 @@ namespace DoW_Mod_Manager.Services
         // GOG variant — port of LAATweaksOld.cs
         // ----------------------------------------------------------------------------------
 
-        private static bool IsLargeAwareGog(string file)
+        private static bool ToggleLaaGog(FileStream fs, long peloc)
         {
-            using FileStream fs = File.OpenRead(file);
-            using BinaryReader br = new(fs);
+            Span<byte> buf = stackalloc byte[2];
 
-            if (br.ReadInt16() != 0x5A4D)       // No MZ Header.
-                return false;
+            long nFilePos = peloc + CHARACTERISTICS_OFFSET;     // LAA flag position.
+            ReadAt(fs, nFilePos, buf);
+            short laaFlag = BinaryPrimitives.ReadInt16LittleEndian(buf);
 
-            br.BaseStream.Position = 0x3C;
-            int peloc = br.ReadInt32();         // Get the PE header location.
+            long nSumPos = nFilePos + 2 + 0x40;                 // Checksum position.
+            ReadAt(fs, nSumPos, buf);
+            short chckSum = BinaryPrimitives.ReadInt16LittleEndian(buf);
 
-            br.BaseStream.Position = peloc;
-            if (br.ReadInt32() != 0x4550)       // No PE header.
-                return false;
-
-            br.BaseStream.Position += 0x12;     // LAA flag position.
-            short laaFlag = br.ReadInt16();
-
-            return (laaFlag & IMAGE_FILE_LARGE_ADDRESS_AWARE) == IMAGE_FILE_LARGE_ADDRESS_AWARE;
-        }
-
-        private static bool ToggleLaaGog(string file)
-        {
-            bool result = false;
-
-            using FileStream fs = File.Open(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-            BinaryReader br = new(fs);
-
-            if (br.ReadInt16() != 0x5A4D)       // No MZ Header.
-                return false;
-
-            br.BaseStream.Position = 0x3C;
-            int peloc = br.ReadInt32();         // Get the PE header location.
-
-            br.BaseStream.Position = peloc;
-            if (br.ReadInt32() != 0x4550)       // No PE header.
-                return false;
-
-            br.BaseStream.Position += 0x12;     // LAA flag position.
-            long nFilePos = (int)br.BaseStream.Position;
-            short laaFlag = br.ReadInt16();
-
-            br.BaseStream.Position += 0x40;     // Checksum position.
-            long nSumPos = (int)br.BaseStream.Position;
-            short chckSum = br.ReadInt16();
-
-            BinaryWriter bw = new(fs);
+            bool result;
             if ((laaFlag & IMAGE_FILE_LARGE_ADDRESS_AWARE) != IMAGE_FILE_LARGE_ADDRESS_AWARE)
             {
                 laaFlag += IMAGE_FILE_LARGE_ADDRESS_AWARE;
                 chckSum += IMAGE_FILE_LARGE_ADDRESS_AWARE;
-                bw.Seek((int)nFilePos, SeekOrigin.Begin);
-                bw.Write(laaFlag);
-                bw.Seek((int)nSumPos, SeekOrigin.Begin);
-                bw.Write(chckSum);
-                bw.Flush();
                 result = true;
             }
-            else if ((laaFlag & IMAGE_FILE_LARGE_ADDRESS_AWARE) == IMAGE_FILE_LARGE_ADDRESS_AWARE)
+            else
             {
                 laaFlag -= IMAGE_FILE_LARGE_ADDRESS_AWARE;
                 chckSum -= IMAGE_FILE_LARGE_ADDRESS_AWARE;
-                bw.Seek((int)nFilePos, SeekOrigin.Begin);
-                bw.Write(laaFlag);
-                bw.Seek((int)nSumPos, SeekOrigin.Begin);
-                bw.Write(chckSum);
-                bw.Flush();
                 result = false;
             }
+
+            BinaryPrimitives.WriteInt16LittleEndian(buf, laaFlag);
+            WriteAt(fs, nFilePos, buf);
+            BinaryPrimitives.WriteInt16LittleEndian(buf, chckSum);
+            WriteAt(fs, nSumPos, buf);
+            fs.Flush(flushToDisk: true);
 
             return result;
         }
