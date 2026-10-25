@@ -38,10 +38,46 @@ under Proton; only the manager is native.
    (`steamapps/common/Dawn of War*`). If it cannot find one, paste the game folder path into
    the field at the top and press **Load**.
 
-Requirements: a Steam install of Dawn of War with Proton enabled (Steam Play). Override the
-Proton/Wine binary with the `DOWMM_PROTON` / `DOWMM_WINE` environment variables if needed.
-Performance tweaks (timer resolution, power plans, fog removal) are Windows-only and are
-greyed out on Linux.
+Requirements: a Steam install of Dawn of War with Proton enabled (Steam Play). Native,
+Flatpak and Snap Steam are supported, including extra library folders on other drives.
+Supported games: Anniversary Edition (Soulstorm, Dark Crusade, Winter Assault, Original) and
+the Definitive Edition.
+
+How the game is started:
+
+- Steam installs are launched through Steam (`steam -applaunch <appid> -modname <mod> ...`) so
+  the Proton version you picked for the game in Steam is used. **The first time, Steam asks
+  you to confirm the launch arguments** — accept it, or nothing will start.
+- Without a usable Steam client the manager runs Proton directly, picking the build mapped to
+  the game in Steam (or the one that created its prefix), then falls back to plain Wine.
+- Non-Steam installs (GOG through Heroic, Lutris, Bottles...) are not auto-detected: paste the
+  game folder and press **Load**. They run with Wine; set `DOWMM_WINEPREFIX` to the prefix the
+  game is installed in.
+
+Environment overrides:
+
+| Variable | Effect |
+|---|---|
+| `DOWMM_PROTON` | Full path to a `proton` script; always run the game with it |
+| `DOWMM_WINE` | Wine binary name or path for the Wine fallback |
+| `DOWMM_WINEPREFIX` | Wine prefix for the Wine fallback (otherwise the Proton prefix, then `WINEPREFIX`) |
+| `STEAM_DIR` | Extra Steam client root to search |
+
+Definitive Edition: the game keeps `Local.ini`, `warnings.log`, profiles and a `Mods` folder
+in its per-user data folder, not in the game folder. On Linux that is inside the Proton prefix:
+`steamapps/compatdata/3556750/pfx/drive_c/users/steamuser/AppData/Roaming/Relic Entertainment/Dawn of War`
+(`%APPDATA%\Relic Entertainment\Dawn of War` on Windows). The manager lists mods from both the
+game folder and that `Mods` folder (`Mods/<mod>.module` or `Mods/<mod>/<mod>.module`), and its
+settings window edits that `Local.ini`, keeping any setting it does not manage.
+
+Mod installers: most mods ship as Windows `Setup.exe` installers. Use **Run installer…** in the
+Mod Downloader to run one inside the game's Proton prefix, and point it at the game folder
+(shown as `Z:\...` in the installer). Archive releases can simply be extracted into the game
+folder.
+
+Not available on Linux: CPU affinity, in-memory fog removal, timer resolution and power plans
+(greyed out), and DXVK management (Proton already ships DXVK). The 4 GB patch is disabled for
+the 64-bit Definitive Edition executable, which does not need it.
 
 > Building from source: `dotnet publish "DoW Mod Manager/DowModManager.csproj" -f net8.0 -r
 > linux-x64 --self-contained -p:PublishSingleFile=true -o artifacts/linux-x64`, then
