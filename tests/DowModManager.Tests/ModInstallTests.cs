@@ -156,7 +156,9 @@ namespace DowModManager.Tests
             Assert.Equal("a", File.ReadAllText(Path.Combine(_game, "MyMod", "data", "a.txt")));
             if (!OperatingSystem.IsWindows())
                 Assert.False(Directory.Exists(Path.Combine(_game, "MyMod", "Data"))); // went into the existing "data"
-            Assert.Contains(Path.Combine(_game, "MyMod", "data", "keep.txt"), result.Overwritten);
+            // Windows paths ignore case: the replaced file may be reported as Data\keep.txt there.
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            Assert.Contains(result.Overwritten, p => string.Equals(p, Path.Combine(_game, "MyMod", "data", "keep.txt"), comparison));
             Assert.Equal(3, result.Created.Count);
         }
 
