@@ -68,10 +68,10 @@ public partial class ModMergerViewModel : ViewModelBase
         string? selectedName = SelectedModule?.Name;
         try
         {
-            _allModules = _merger.GetAllModuleNames(_install.InstallDir);
+            _allModules = _merger.GetAllModuleNames(_install);
 
             Modules.Clear();
-            foreach (var module in _merger.GetMergeableModules(_install.InstallDir, _install.IsOldGame))
+            foreach (var module in _merger.GetMergeableModules(_install))
                 Modules.Add(module);
 
             SelectedModule = Modules.FirstOrDefault(m => m.Name == selectedName) ?? Modules.FirstOrDefault();

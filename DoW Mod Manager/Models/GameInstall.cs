@@ -48,6 +48,25 @@ public sealed class GameInstall
     /// <summary>Steam root install path (STEAM_COMPAT_CLIENT_INSTALL_PATH). Null on Windows.</summary>
     public string? SteamRoot { get; init; }
 
+    private readonly string? _userDataDir;
+
+    /// <summary>
+    /// Per-user game data: <c>Local.ini</c>, <c>warnings.log</c>, <c>Profiles/</c>. The classic games
+    /// keep it in <see cref="InstallDir"/> (the default); the Definitive Edition uses
+    /// <c>%APPDATA%\Relic Entertainment\Dawn of War</c> (inside the Proton prefix on Linux).
+    /// </summary>
+    public string UserDataDir
+    {
+        get => _userDataDir ?? InstallDir;
+        init => _userDataDir = string.IsNullOrEmpty(value) ? null : value;
+    }
+
+    /// <summary>
+    /// Extra directory scanned for mods besides <see cref="InstallDir"/>: the Definitive Edition's
+    /// <c>&lt;UserDataDir&gt;/Mods</c>. Null for the classic games.
+    /// </summary>
+    public string? ModsDir { get; init; }
+
     public string ExecutablePath => Path.Combine(InstallDir, ExecutableName);
 
     /// <summary>

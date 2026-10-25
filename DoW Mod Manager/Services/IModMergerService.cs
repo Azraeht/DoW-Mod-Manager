@@ -19,10 +19,19 @@ namespace DoW_Mod_Manager.Services
         IReadOnlyList<MergeableModule> GetMergeableModules(string installDir, bool isOldGame);
 
         /// <summary>
+        /// Mergeable modules of <paramref name="install"/>, including the Definitive Edition Mods dir.
+        /// Each <c>_MERGED</c> copy lives next to its original module.
+        /// </summary>
+        IReadOnlyList<MergeableModule> GetMergeableModules(GameInstall install);
+
+        /// <summary>
         /// Names of every non-base module installed (legacy <c>AllFoundModules</c>): the pool of mods
         /// that can be added as <c>RequiredMod</c>.
         /// </summary>
         IReadOnlyList<string> GetAllModuleNames(string installDir);
+
+        /// <summary>Like <see cref="GetAllModuleNames(string)"/>, also scanning the Definitive Edition Mods dir.</summary>
+        IReadOnlyList<string> GetAllModuleNames(GameInstall install);
 
         /// <summary>Parses the required mods of <paramref name="moduleFilePath"/> (legacy <c>GetActiveModsFromFile</c>).</summary>
         MergeDefinition Load(string moduleFilePath, IReadOnlyCollection<string> installedModules);

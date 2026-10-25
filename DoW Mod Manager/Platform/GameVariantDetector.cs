@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using DoW_Mod_Manager.Models;
+using DoW_Mod_Manager.Services;
 
 namespace DoW_Mod_Manager.Platform;
 
@@ -54,6 +55,27 @@ public static class GameVariantDetector
         GameVariant.DefinitiveEdition => OriginalExe,
         _ => OriginalExe
     };
+
+    /// <summary>
+    /// Per-user data directory and extra mods directory of an install. The classic games keep their
+    /// data in the install dir; the Definitive Edition uses <c>&lt;AppData&gt;\Relic Entertainment\Dawn
+    /// of War</c> and its <c>Mods</c> subfolder. <paramref name="appDataDir"/> is the roaming AppData
+    /// directory as the game sees it (null when unknown: the install dir is then used).
+    /// </summary>
+    public static (string UserDataDir, string? ModsDir) UserDataFor(GameVariant variant, string installDir, string? appDataDir)
+    {
+        if (variant != GameVariant.DefinitiveEdition)
+            return (installDir, null);
+
+        string userData = string.IsNullOrEmpty(appDataDir)
+            ? installDir
+            : GamePaths.Resolve(appDataDir, "Relic Entertainment", "Dawn of War");
+        return (userData, GamePaths.Resolve(userData, "Mods"));
+    }
+
+    /// <summary>The roaming AppData directory inside a Proton prefix (<c>compatdata/&lt;appid&gt;</c>).</summary>
+    public static string ProtonAppDataDir(string protonPrefix) =>
+        GamePaths.Resolve(protonPrefix, "pfx", "drive_c", "users", "steamuser", "AppData", "Roaming");
 
     private static bool IsDefinitiveEdition(string directory, int? steamAppId)
     {

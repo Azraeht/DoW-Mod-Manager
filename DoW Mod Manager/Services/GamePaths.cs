@@ -65,6 +65,48 @@ namespace DoW_Mod_Manager.Services
         /// <summary><c>Engine/Locale/English/Data/font</c>: the *.fnt files managed by the Fonts Manager.</summary>
         public static string Fonts(string installDir) => Resolve(installDir, "Engine", "Locale", "English", "Data", "font");
 
+        /// <summary>
+        /// Directories that may hold mod <c>.module</c> files, in lookup order: the install dir, then
+        /// (Definitive Edition) the Mods dir itself and each of its subfolders, since mods are
+        /// installed both as <c>Mods/X.module</c> and <c>Mods/X/X.module</c>.
+        /// </summary>
+        public static IReadOnlyList<string> ModuleDirectories(string installDir, string? modsDir)
+        {
+            var dirs = new List<string> { installDir };
+            if (string.IsNullOrEmpty(modsDir) || !Directory.Exists(modsDir))
+                return dirs;
+
+            dirs.Add(modsDir);
+            try
+            {
+                dirs.AddRange(Directory.GetDirectories(modsDir).OrderBy(d => d, StringComparer.OrdinalIgnoreCase));
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return dirs;
+        }
+
+        /// <summary>The <c>*.module</c> files (any extension casing) directly inside <paramref name="directory"/>.</summary>
+        public static IReadOnlyList<string> ModuleFiles(string directory)
+        {
+            if (!Directory.Exists(directory))
+                return [];
+            try
+            {
+                return Directory.GetFiles(directory, "*.module", ModuleEnumeration)
+                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+            catch (IOException) { return []; }
+            catch (UnauthorizedAccessException) { return []; }
+        }
+
+        private static readonly EnumerationOptions ModuleEnumeration = new()
+        {
+            MatchCasing = MatchCasing.CaseInsensitive,
+            IgnoreInaccessible = true,
+        };
+
         /// <summary>Per-user data directory of the manager (modlist cache…), created on demand.</summary>
         public static string AppDataDirectory()
         {

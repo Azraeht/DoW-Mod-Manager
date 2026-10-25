@@ -1,3 +1,5 @@
+using DoW_Mod_Manager.Models;
+
 namespace DoW_Mod_Manager.Services
 {
     /// <summary>Setting names used in <c>Local.ini</c>, <c>spdx9_config.txt</c> and <c>playercfg.lua</c>.</summary>
@@ -100,22 +102,35 @@ namespace DoW_Mod_Manager.Services
     {
         GameSettings GetDefaults();
 
+        /// <summary>Defaults for <paramref name="install"/>: <c>currentmoddc</c> is its base game module.</summary>
+        GameSettings GetDefaults(GameInstall install);
+
         /// <summary>
-        /// Reads every settings file of <paramref name="installDir"/> over the defaults. The
-        /// <c>playercfg.lua</c> values come from the profile named in <c>Local.ini</c> (or the first
-        /// existing profile if that one is gone).
+        /// Reads every settings file of a classic install whose user data lives in
+        /// <paramref name="installDir"/> over the defaults. The <c>playercfg.lua</c> values come from
+        /// the profile named in <c>Local.ini</c> (or the first existing profile if that one is gone).
         /// </summary>
         GameSettings Read(string installDir);
 
+        /// <summary>
+        /// Like <see cref="Read(string)"/>: <c>spdx9_config.txt</c> from <see cref="GameInstall.InstallDir"/>,
+        /// <c>Local.ini</c> and profiles from <see cref="GameInstall.UserDataDir"/>.
+        /// </summary>
+        GameSettings Read(GameInstall install);
+
         /// <summary>Overwrites the <c>playercfg.lua</c> values of <paramref name="settings"/> with <paramref name="profileName"/>'s.</summary>
-        void ReadPlayerConfig(string installDir, string profileName, GameSettings settings);
+        void ReadPlayerConfig(string userDataDir, string profileName, GameSettings settings);
 
         /// <summary>Writes <c>Local.ini</c>, <c>spdx9_config.txt</c> and the current profile's <c>playercfg.lua</c>.</summary>
         void Write(string installDir, GameSettings settings);
 
-        IReadOnlyList<PlayerProfile> GetProfiles(string installDir);
-        PlayerProfile CreateProfile(string installDir, string playerName);
-        void RenameProfile(string installDir, string profileName, string newPlayerName);
-        void DeleteProfile(string installDir, string profileName);
+        /// <summary>Like <see cref="Write(string, GameSettings)"/>, honouring <see cref="GameInstall.UserDataDir"/>.</summary>
+        void Write(GameInstall install, GameSettings settings);
+
+        // Profiles live in <userDataDir>/Profiles (GameInstall.UserDataDir).
+        IReadOnlyList<PlayerProfile> GetProfiles(string userDataDir);
+        PlayerProfile CreateProfile(string userDataDir, string playerName);
+        void RenameProfile(string userDataDir, string profileName, string newPlayerName);
+        void DeleteProfile(string userDataDir, string profileName);
     }
 }

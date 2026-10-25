@@ -22,29 +22,47 @@ namespace DoW_Mod_Manager.Services
             if (string.IsNullOrEmpty(installDir))
                 throw new ArgumentException("Install directory must be provided.", nameof(installDir));
 
+            return GetPlayableMods(GamePaths.ModuleDirectories(installDir, modsDir: null), isOldGame);
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<ModInfo> GetPlayableMods(GameInstall install)
+        {
+            ArgumentNullException.ThrowIfNull(install);
+            if (string.IsNullOrEmpty(install.InstallDir))
+                throw new ArgumentException("Install directory must be provided.", nameof(install));
+
+            return GetPlayableMods(GamePaths.ModuleDirectories(install.InstallDir, install.ModsDir), install.IsOldGame);
+        }
+
+        private List<ModInfo> GetPlayableMods(IReadOnlyList<string> moduleDirectories, bool isOldGame)
+        {
             var result = new List<ModInfo>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            if (!Directory.Exists(installDir))
-                return result;
-
-            string[] moduleFilePaths = Directory.GetFiles(installDir, "*.module");
-
-            foreach (string filePath in moduleFilePaths)
+            foreach (string directory in moduleDirectories)
             {
-                if (!File.Exists(filePath))
-                    continue;
+                foreach (string filePath in GamePaths.ModuleFiles(directory))
+                {
+                    if (!File.Exists(filePath))
+                        continue;
 
-                string fileName = Path.GetFileNameWithoutExtension(filePath);
+                    string fileName = Path.GetFileNameWithoutExtension(filePath);
 
-                // There is no point adding base modules (W40k, ..., DoWDE) to the list.
-                if (BaseModules.Contains(fileName))
-                    continue;
+                    // There is no point adding base modules (W40k, ..., DoWDE) to the list. A mod
+                    // present in several places is listed once: the first directory wins.
+                    if (BaseModules.Contains(fileName) || seen.Contains(fileName))
+                        continue;
 
-                ModInfo mod = _parser.Parse(filePath, isOldGame);
+                    ModInfo mod = _parser.Parse(filePath, isOldGame);
 
-                // Filter the unplayable mods and populate the list only with playable mods.
-                if (mod.IsPlayable)
-                    result.Add(mod);
+                    // Filter the unplayable mods and populate the list only with playable mods.
+                    if (mod.IsPlayable)
+                    {
+                        result.Add(mod);
+                        seen.Add(fileName);
+                    }
+                }
             }
 
             return result;
@@ -57,6 +75,35 @@ namespace DoW_Mod_Manager.Services
                 throw new ArgumentException("Install directory must be provided.", nameof(installDir));
             ArgumentNullException.ThrowIfNull(mod);
 
+            return ResolveDependencies(installDir, [installDir], mod);
+        }
+
+        /// <inheritdoc />
+        public IReadOnlyList<ModDependencyStatus> ResolveDependencies(GameInstall install, ModInfo mod)
+        {
+            ArgumentNullException.ThrowIfNull(install);
+            if (string.IsNullOrEmpty(install.InstallDir))
+                throw new ArgumentException("Install directory must be provided.", nameof(install));
+            ArgumentNullException.ThrowIfNull(mod);
+
+            // A mod's own directory first (Mods/X/ holds X and the mods shipped with it), then the
+            // install dir, then the Definitive Edition Mods dir and its subfolders.
+            var searchDirs = new List<string>();
+            string? ownDir = string.IsNullOrEmpty(mod.ModuleFilePath) ? null : Path.GetDirectoryName(mod.ModuleFilePath);
+            if (!string.IsNullOrEmpty(ownDir))
+                searchDirs.Add(ownDir);
+            searchDirs.AddRange(GamePaths.ModuleDirectories(install.InstallDir, install.ModsDir));
+
+            return ResolveDependencies(install.InstallDir, searchDirs, mod);
+        }
+
+        /// <summary>
+        /// Base modules always come from <paramref name="installDir"/>; other required mods from the
+        /// first of <paramref name="searchDirs"/> holding their <c>.module</c>. A dependency's
+        /// <c>ModFolder</c> resolves relative to the directory its <c>.module</c> lives in.
+        /// </summary>
+        private static List<ModDependencyStatus> ResolveDependencies(string installDir, IReadOnlyList<string> searchDirs, ModInfo mod)
+        {
             var result = new List<ModDependencyStatus>(mod.RequiredMods.Count);
 
             foreach (string requiredModName in mod.RequiredMods)
@@ -66,13 +113,15 @@ namespace DoW_Mod_Manager.Services
                 string normalisedName = requiredModName.Replace(".module", "");
                 // Mods are authored on Windows: "RequiredMod.1 = dxp2" must find "DXP2.module" on a
                 // case-sensitive file system too.
-                string moduleFilePath = GamePaths.Resolve(installDir, normalisedName + ".module");
+                string moduleFilePath = FindModuleFile(installDir, searchDirs, normalisedName);
 
                 string modFolder;
+                string modRoot = installDir;
                 if (File.Exists(moduleFilePath))
                 {
                     // Mirror LoadModFoldersFromFile: read ModFolder with ".module" stripped.
                     modFolder = ReadModFolder(moduleFilePath);
+                    modRoot = Path.GetDirectoryName(moduleFilePath) ?? installDir;
                 }
                 else
                 {
@@ -82,7 +131,7 @@ namespace DoW_Mod_Manager.Services
                 // Mirror CheckforInstalledMods: the dependency is installed when the asset
                 // folder exists on disk. A MISSING folder name resolves to "<dir>/MISSING"
                 // which will not exist, so it is reported as not installed.
-                string folderPath = GamePaths.Resolve(installDir, modFolder);
+                string folderPath = GamePaths.Resolve(modRoot, modFolder);
                 bool isInstalled = Directory.Exists(folderPath);
 
                 result.Add(new ModDependencyStatus
@@ -94,6 +143,33 @@ namespace DoW_Mod_Manager.Services
             }
 
             return result;
+        }
+
+        /// <summary>The first existing <c>&lt;name&gt;.module</c>, or the install-dir path when none exists.</summary>
+        private static string FindModuleFile(string installDir, IReadOnlyList<string> searchDirs, string name)
+        {
+            string inInstallDir = GamePaths.Resolve(installDir, name + ".module");
+            if (BaseModules.Contains(name))
+                return inInstallDir;
+
+            foreach (string dir in searchDirs)
+            {
+                string candidate = GamePaths.Resolve(dir, name + ".module");
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
+            return inInstallDir;
+        }
+
+        /// <summary>
+        /// Directory a mod's <c>ModFolder</c> is relative to: the directory of its <c>.module</c>
+        /// (the install dir for the classic games, <c>Mods/…</c> for Definitive Edition mods).
+        /// </summary>
+        public static string ModRoot(GameInstall install, ModInfo mod)
+        {
+            string? dir = string.IsNullOrEmpty(mod.ModuleFilePath) ? null : Path.GetDirectoryName(mod.ModuleFilePath);
+            return string.IsNullOrEmpty(dir) ? install.InstallDir : dir;
         }
 
         /// <summary>

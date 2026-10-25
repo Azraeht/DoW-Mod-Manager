@@ -175,7 +175,7 @@ public partial class ModManagerViewModel : ViewModelBase
         RequiredMods.Clear();
         try
         {
-            foreach (var mod in _mods.GetPlayableMods(install.InstallDir, install.IsOldGame))
+            foreach (var mod in _mods.GetPlayableMods(install))
                 Mods.Add(mod);
 
             SelectedMod = Mods.FirstOrDefault(m => m.Name == select) ?? Mods.FirstOrDefault();
@@ -199,7 +199,7 @@ public partial class ModManagerViewModel : ViewModelBase
 
         try
         {
-            foreach (var dep in _mods.ResolveDependencies(SelectedInstall.InstallDir, SelectedMod))
+            foreach (var dep in _mods.ResolveDependencies(SelectedInstall, SelectedMod))
                 RequiredMods.Add(dep);
         }
         catch (Exception ex)
@@ -353,7 +353,8 @@ public partial class ModManagerViewModel : ViewModelBase
             return;
 
         var folder = SelectedMod is { ModFolder.Length: > 0 }
-            ? GamePaths.Resolve(SelectedInstall.InstallDir, SelectedMod.ModFolder)
+            // ModFolder is relative to the .module's directory (install dir or DE Mods folder).
+            ? GamePaths.Resolve(ModService.ModRoot(SelectedInstall, SelectedMod), SelectedMod.ModFolder)
             : SelectedInstall.InstallDir;
 
         if (Directory.Exists(folder))
@@ -368,7 +369,7 @@ public partial class ModManagerViewModel : ViewModelBase
         if (SelectedInstall is null)
             return;
 
-        var errors = _warnings.GetFatalDataErrors(SelectedInstall.InstallDir);
+        var errors = _warnings.GetFatalDataErrors(SelectedInstall.UserDataDir);
         Status = errors.Count > 0
             ? $"{errors.Count} fatal data error(s):\n{string.Join('\n', errors)}"
             : "No fatal errors found in warnings.log.";

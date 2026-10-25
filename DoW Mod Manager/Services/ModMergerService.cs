@@ -23,14 +23,21 @@ namespace DoW_Mod_Manager.Services
 
         /// <inheritdoc />
         public IReadOnlyList<MergeableModule> GetMergeableModules(string installDir, bool isOldGame)
+            => GetMergeableModules(_mods.GetPlayableMods(installDir, isOldGame));
+
+        /// <inheritdoc />
+        public IReadOnlyList<MergeableModule> GetMergeableModules(GameInstall install)
+            => GetMergeableModules(_mods.GetPlayableMods(install));
+
+        private static List<MergeableModule> GetMergeableModules(IReadOnlyList<ModInfo> playable)
         {
-            var playable = _mods.GetPlayableMods(installDir, isOldGame);
             var byName = playable.ToDictionary(m => m.Name, StringComparer.OrdinalIgnoreCase);
             var result = new List<MergeableModule>();
 
             foreach (var mod in playable.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
             {
-                string mergedPath = MergedPathFor(installDir, mod.Name);
+                // The merged copy sits next to the original (install dir or a Mods folder).
+                string mergedPath = MergedPathFor(Path.GetDirectoryName(mod.ModuleFilePath)!, mod.Name);
 
                 if (mod.Name.EndsWith(IModMergerService.MergePostfix, StringComparison.OrdinalIgnoreCase))
                 {
@@ -53,15 +60,23 @@ namespace DoW_Mod_Manager.Services
         }
 
         /// <inheritdoc />
-        public IReadOnlyList<string> GetAllModuleNames(string installDir)
+        public IReadOnlyList<string> GetAllModuleNames(string installDir) => GetAllModuleNames(installDir, modsDir: null);
+
+        /// <inheritdoc />
+        public IReadOnlyList<string> GetAllModuleNames(GameInstall install) =>
+            GetAllModuleNames(install.InstallDir, install.ModsDir);
+
+        private static List<string> GetAllModuleNames(string installDir, string? modsDir)
         {
             if (!Directory.Exists(installDir))
                 return [];
 
-            return Directory.GetFiles(installDir, "*.module")
+            return GamePaths.ModuleDirectories(installDir, modsDir)
+                .SelectMany(GamePaths.ModuleFiles)
                 .Select(Path.GetFileNameWithoutExtension)
                 .OfType<string>()
                 .Where(n => !IsBaseModule(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
@@ -172,7 +187,7 @@ namespace DoW_Mod_Manager.Services
 
         private static bool IsBaseModule(string name) => BaseModules.Contains(name);
 
-        private static string MergedPathFor(string installDir, string moduleName) =>
-            Path.Combine(installDir, moduleName + IModMergerService.MergePostfix + ".module");
+        private static string MergedPathFor(string moduleDir, string moduleName) =>
+            Path.Combine(moduleDir, moduleName + IModMergerService.MergePostfix + ".module");
     }
 }

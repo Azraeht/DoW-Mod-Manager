@@ -131,12 +131,16 @@ public sealed class LinuxGameInstallLocator : IGameInstallLocator
         if (variant is null)
             return null;
 
+        // Outside Steam there is no known Wine prefix: user data stays next to the game.
+        var (userData, modsDir) = GameVariantDetector.UserDataFor(variant.Value, directory, appDataDir: null);
         return new GameInstall
         {
             InstallDir = directory,
             ExecutableName = GameVariantDetector.ExecutableFor(variant.Value),
             Variant = variant.Value,
-            Distribution = GameDistribution.Unknown
+            Distribution = GameDistribution.Unknown,
+            UserDataDir = userData,
+            ModsDir = modsDir
         };
     }
 
@@ -153,6 +157,11 @@ public sealed class LinuxGameInstallLocator : IGameInstallLocator
 
         var appId = manifestAppId ?? AppIdForVariant(variant.Value);
         var library = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(steamAppsDir)) ?? steamAppsDir;
+        var protonPrefix = Path.Combine(steamAppsDir, "compatdata", appId.ToString());
+        // The Definitive Edition keeps Local.ini, warnings.log, Profiles and Mods in the prefix's
+        // %APPDATA%\Relic Entertainment\Dawn of War; the classic games in their install dir.
+        var (userData, modsDir) = GameVariantDetector.UserDataFor(
+            variant.Value, gameDir, GameVariantDetector.ProtonAppDataDir(protonPrefix));
 
         return new GameInstall
         {
@@ -163,7 +172,9 @@ public sealed class LinuxGameInstallLocator : IGameInstallLocator
             SteamAppId = appId,
             // The prefix may not exist yet if the game was never launched; we still surface the
             // canonical path so the launcher can create/use it.
-            ProtonPrefix = Path.Combine(steamAppsDir, "compatdata", appId.ToString()),
+            ProtonPrefix = protonPrefix,
+            UserDataDir = userData,
+            ModsDir = modsDir,
             // The client root whose libraryfolders.vdf lists this library, not just the first
             // root found: several can coexist (leftover native + Snap/Flatpak).
             SteamRoot = SteamPaths.ResolveClientRoot(library, gameDir, steamRoots)

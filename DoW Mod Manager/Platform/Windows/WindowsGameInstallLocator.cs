@@ -16,6 +16,19 @@ namespace DoW_Mod_Manager.Platform.Windows;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsGameInstallLocator : IGameInstallLocator
 {
+    private readonly string? _appDataDir;
+
+    public WindowsGameInstallLocator()
+        : this(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData))
+    {
+    }
+
+    /// <summary>Uses <paramref name="appDataDir"/> as %APPDATA% (Definitive Edition user data).</summary>
+    internal WindowsGameInstallLocator(string? appDataDir)
+    {
+        _appDataDir = appDataDir;
+    }
+
     public GameInstall? IdentifyInstall(string directory)
     {
         if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
@@ -48,13 +61,22 @@ public sealed class WindowsGameInstallLocator : IGameInstallLocator
         return Task.FromResult<IReadOnlyList<GameInstall>>(results);
     }
 
-    static GameInstall Build(string directory, string executable, GameVariant variant) => new()
+    GameInstall Build(string directory, string executable, GameVariant variant)
     {
-        InstallDir = directory,
-        ExecutableName = executable,
-        Variant = variant,
-        // The Steam/GoG distinction is a user setting in the legacy app; default to Steam here.
-        // (Linux discovery and future Windows registry probing can refine this.)
-        Distribution = GameDistribution.Steam
-    };
+        // The Definitive Edition keeps Local.ini, warnings.log, Profiles and Mods in
+        // %APPDATA%\Relic Entertainment\Dawn of War; the classic games in their install dir.
+        var (userData, modsDir) = GameVariantDetector.UserDataFor(variant, directory, _appDataDir);
+
+        return new GameInstall
+        {
+            InstallDir = directory,
+            ExecutableName = executable,
+            Variant = variant,
+            // The Steam/GoG distinction is a user setting in the legacy app; default to Steam here.
+            // (Linux discovery and future Windows registry probing can refine this.)
+            Distribution = GameDistribution.Steam,
+            UserDataDir = userData,
+            ModsDir = modsDir
+        };
+    }
 }

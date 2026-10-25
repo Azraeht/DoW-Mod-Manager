@@ -98,12 +98,12 @@ public partial class SettingsViewModel : ViewModelBase
 
         try
         {
-            _s = _service.Read(install.InstallDir);
-            Status = $"Settings of {install.InstallDir}";
+            _s = _service.Read(install);
+            Status = $"Settings of {install.UserDataDir}";
         }
         catch (Exception ex)
         {
-            _s = _service.GetDefaults();
+            _s = _service.GetDefaults(install);
             Status = $"Could not read the game settings, showing defaults: {ex.Message}";
         }
 
@@ -186,7 +186,7 @@ public partial class SettingsViewModel : ViewModelBase
         try
         {
             Profiles.Clear();
-            foreach (var p in _service.GetProfiles(_install.InstallDir))
+            foreach (var p in _service.GetProfiles(_install.UserDataDir))
                 Profiles.Add(p);
 
             string wanted = select ?? Get(K.PlayerProfile);
@@ -204,7 +204,7 @@ public partial class SettingsViewModel : ViewModelBase
             return;
 
         _s[K.PlayerProfile] = value.ProfileName;
-        _service.ReadPlayerConfig(_install.InstallDir, value.ProfileName, _s);
+        _service.ReadPlayerConfig(_install.UserDataDir, value.ProfileName, _s);
         bool wasLoading = _loading;
         RefreshAll();
         if (!wasLoading)
@@ -218,7 +218,7 @@ public partial class SettingsViewModel : ViewModelBase
     {
         try
         {
-            var created = _service.CreateProfile(_install.InstallDir, NewPlayerName.Trim());
+            var created = _service.CreateProfile(_install.UserDataDir, NewPlayerName.Trim());
             NewPlayerName = "";
             LoadProfiles(created.ProfileName);
             IsDirty = true;
@@ -237,7 +237,7 @@ public partial class SettingsViewModel : ViewModelBase
         try
         {
             string profile = SelectedProfile!.ProfileName;
-            _service.RenameProfile(_install.InstallDir, profile, NewPlayerName.Trim());
+            _service.RenameProfile(_install.UserDataDir, profile, NewPlayerName.Trim());
             NewPlayerName = "";
             LoadProfiles(profile);
         }
@@ -260,7 +260,7 @@ public partial class SettingsViewModel : ViewModelBase
 
         try
         {
-            _service.DeleteProfile(_install.InstallDir, profile.ProfileName);
+            _service.DeleteProfile(_install.UserDataDir, profile.ProfileName);
             LoadProfiles();
             IsDirty = true;
         }
@@ -427,7 +427,7 @@ public partial class SettingsViewModel : ViewModelBase
     {
         try
         {
-            _service.Write(_install.InstallDir, _s);
+            _service.Write(_install, _s);
             if (_pendingLaunchFlags is not null)
             {
                 _applyLaunchFlags(_pendingLaunchFlags);
@@ -446,9 +446,9 @@ public partial class SettingsViewModel : ViewModelBase
     private void Defaults()
     {
         string profile = Get(K.PlayerProfile);
-        _s = _service.GetDefaults();
+        _s = _service.GetDefaults(_install);
         _s[K.PlayerProfile] = profile;
-        _service.ReadPlayerConfig(_install.InstallDir, profile, _s);
+        _service.ReadPlayerConfig(_install.UserDataDir, profile, _s);
         _pendingLaunchFlags = new LaunchFlagChange(ForceHighPoly: false, NoPrecacheModels: false);
         RefreshAll();
         IsDirty = true;

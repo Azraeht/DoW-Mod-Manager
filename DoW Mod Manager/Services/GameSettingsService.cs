@@ -1,4 +1,5 @@
 using System.Text;
+using DoW_Mod_Manager.Models;
 using K = DoW_Mod_Manager.Services.GameSettingsKeys;
 
 namespace DoW_Mod_Manager.Services
@@ -81,12 +82,17 @@ namespace DoW_Mod_Manager.Services
         };
 
         /// <inheritdoc />
-        public GameSettings GetDefaults() => new(new Dictionary<string, string>
+        public GameSettings GetDefaults() => GetDefaults(baseModule: "W40k");
+
+        /// <inheritdoc />
+        public GameSettings GetDefaults(GameInstall install) => GetDefaults(install.BaseGameModuleName);
+
+        private static GameSettings GetDefaults(string baseModule) => new(new Dictionary<string, string>
         {
             [K.AllowHwCursor] = "1",
 
             [K.CameraDetail] = "1",
-            [K.CurrentMod] = "W40k",
+            [K.CurrentMod] = baseModule,
             [K.DynamicLights] = "2",
             [K.EventDetailLevel] = "2",
             [K.ForceWatchMovies] = "1",
@@ -130,18 +136,25 @@ namespace DoW_Mod_Manager.Services
         });
 
         /// <inheritdoc />
-        public GameSettings Read(string installDir)
+        public GameSettings Read(string installDir) => Read(installDir, installDir, GetDefaults());
+
+        /// <inheritdoc />
+        public GameSettings Read(GameInstall install) => Read(install.InstallDir, install.UserDataDir, GetDefaults(install));
+
+        /// <summary>
+        /// The driver config lives in the install dir; <c>Local.ini</c> and the profiles in the
+        /// per-user data dir (the same directory for the classic games).
+        /// </summary>
+        private GameSettings Read(string installDir, string userDataDir, GameSettings settings)
         {
-            GameSettings settings = GetDefaults();
-
             ReadDriverConfig(installDir, settings);
-            ReadLocalIni(installDir, settings);
+            ReadLocalIni(userDataDir, settings);
 
-            var profiles = GetProfiles(installDir);
+            var profiles = GetProfiles(userDataDir);
             if (profiles.Count > 0 && profiles.All(p => p.ProfileName != settings[K.PlayerProfile]))
                 settings[K.PlayerProfile] = profiles[0].ProfileName;
 
-            ReadPlayerConfig(installDir, settings[K.PlayerProfile], settings);
+            ReadPlayerConfig(userDataDir, settings[K.PlayerProfile], settings);
             return settings;
         }
 
@@ -157,9 +170,9 @@ namespace DoW_Mod_Manager.Services
             settings[K.AllowHwCursor] = parts.Length > 1 ? parts[1] : "0";
         }
 
-        private static void ReadLocalIni(string installDir, GameSettings settings)
+        private static void ReadLocalIni(string userDataDir, GameSettings settings)
         {
-            string path = GamePaths.LocalIni(installDir);
+            string path = GamePaths.LocalIni(userDataDir);
             if (!File.Exists(path))
                 return;
 
@@ -181,9 +194,9 @@ namespace DoW_Mod_Manager.Services
         }
 
         /// <inheritdoc />
-        public void ReadPlayerConfig(string installDir, string profileName, GameSettings settings)
+        public void ReadPlayerConfig(string userDataDir, string profileName, GameSettings settings)
         {
-            string path = GamePaths.Resolve(GamePaths.Profiles(installDir), profileName, PlayerConfig);
+            string path = GamePaths.Resolve(GamePaths.Profiles(userDataDir), profileName, PlayerConfig);
             if (!File.Exists(path))
                 return;
 
@@ -204,20 +217,25 @@ namespace DoW_Mod_Manager.Services
         }
 
         /// <inheritdoc />
-        public void Write(string installDir, GameSettings settings)
+        public void Write(string installDir, GameSettings settings) => Write(installDir, installDir, settings);
+
+        /// <inheritdoc />
+        public void Write(GameInstall install, GameSettings settings) => Write(install.InstallDir, install.UserDataDir, settings);
+
+        private static void Write(string installDir, string userDataDir, GameSettings settings)
         {
-            WriteLocalIni(installDir, settings);
+            WriteLocalIni(userDataDir, settings);
             WriteDriverConfig(installDir, settings);
-            WritePlayerConfig(installDir, settings);
+            WritePlayerConfig(userDataDir, settings);
         }
 
-        private static void WriteLocalIni(string installDir, GameSettings settings)
+        private static void WriteLocalIni(string userDataDir, GameSettings settings)
         {
             var sb = new StringBuilder("[global]").AppendLine();
             foreach (string key in LocalIniKeys)
                 sb.Append(key).Append('=').Append(settings[key]).AppendLine();
 
-            WindowsText.WriteAllText(GamePaths.LocalIni(installDir), sb.ToString());
+            WindowsText.WriteAllText(GamePaths.LocalIni(userDataDir), sb.ToString());
         }
 
         private static void WriteDriverConfig(string installDir, GameSettings settings)
@@ -244,9 +262,9 @@ namespace DoW_Mod_Manager.Services
             WindowsText.WriteAllLines(path, lines);
         }
 
-        private static void WritePlayerConfig(string installDir, GameSettings settings)
+        private static void WritePlayerConfig(string userDataDir, GameSettings settings)
         {
-            string profileDir = GamePaths.Resolve(GamePaths.Profiles(installDir), settings[K.PlayerProfile]);
+            string profileDir = GamePaths.Resolve(GamePaths.Profiles(userDataDir), settings[K.PlayerProfile]);
             if (!Directory.Exists(profileDir))
                 return;
 
@@ -286,9 +304,9 @@ namespace DoW_Mod_Manager.Services
         }
 
         /// <inheritdoc />
-        public IReadOnlyList<PlayerProfile> GetProfiles(string installDir)
+        public IReadOnlyList<PlayerProfile> GetProfiles(string userDataDir)
         {
-            string root = GamePaths.Profiles(installDir);
+            string root = GamePaths.Profiles(userDataDir);
             if (!Directory.Exists(root))
                 return [];
 
@@ -300,12 +318,12 @@ namespace DoW_Mod_Manager.Services
         }
 
         /// <inheritdoc />
-        public PlayerProfile CreateProfile(string installDir, string playerName)
+        public PlayerProfile CreateProfile(string userDataDir, string playerName)
         {
-            string root = GamePaths.Profiles(installDir);
+            string root = GamePaths.Profiles(userDataDir);
             Directory.CreateDirectory(root);
 
-            var used = GetProfiles(installDir).Select(p => ProfileIndex(p.ProfileName)).ToHashSet();
+            var used = GetProfiles(userDataDir).Select(p => ProfileIndex(p.ProfileName)).ToHashSet();
             int index = 1;
             while (used.Contains(index))
                 index++;
@@ -319,13 +337,13 @@ namespace DoW_Mod_Manager.Services
         }
 
         /// <inheritdoc />
-        public void RenameProfile(string installDir, string profileName, string newPlayerName) =>
-            WritePlayerName(GamePaths.Resolve(GamePaths.Profiles(installDir), profileName), newPlayerName);
+        public void RenameProfile(string userDataDir, string profileName, string newPlayerName) =>
+            WritePlayerName(GamePaths.Resolve(GamePaths.Profiles(userDataDir), profileName), newPlayerName);
 
         /// <inheritdoc />
-        public void DeleteProfile(string installDir, string profileName)
+        public void DeleteProfile(string userDataDir, string profileName)
         {
-            string dir = GamePaths.Resolve(GamePaths.Profiles(installDir), profileName);
+            string dir = GamePaths.Resolve(GamePaths.Profiles(userDataDir), profileName);
             if (Directory.Exists(dir))
                 Directory.Delete(dir, recursive: true);
         }
