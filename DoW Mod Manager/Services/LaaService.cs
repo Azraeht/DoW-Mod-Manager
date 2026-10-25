@@ -49,7 +49,7 @@ namespace DoW_Mod_Manager.Services
         {
             try
             {
-                using FileStream fs = File.OpenRead(exePath);
+                using FileStream fs = OpenForReading(exePath);
                 return ReadHeader(fs).Applicability;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
@@ -69,7 +69,7 @@ namespace DoW_Mod_Manager.Services
             // Both legacy algorithms (IsLargeAware in LAATweaks and LAATweaksOld) read the same
             // 16-bit COFF Characteristics field at e_lfanew + 0x16 and test bit 0x20. That field has
             // the same position in PE32+, so the answer is also correct for 64-bit images.
-            using FileStream fs = File.OpenRead(exePath);
+            using FileStream fs = OpenForReading(exePath);
             PeHeader header = ReadHeader(fs);
             if (header.Applicability == LaaApplicability.UnsupportedImage)
                 return false;
@@ -158,6 +158,12 @@ namespace DoW_Mod_Manager.Services
             s.ReadExactly(dest);
             return true;
         }
+
+        // Header probes must not fail because another process has the file open (on Windows a plain
+        // OpenRead conflicts with any handle that has write access): the "in use" case is reported
+        // by OpenForPatching, where it matters.
+        private static FileStream OpenForReading(string exePath) =>
+            new(exePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
         private static FileStream OpenForPatching(string exePath)
         {
