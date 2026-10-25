@@ -46,11 +46,14 @@ else
     cp "${ICON_SRC}" "${APPDIR}/dowmodmanager.png"
 fi
 
-echo ">> Fetching appimagetool"
-TOOL="${OUT_DIR}/appimagetool-x86_64.AppImage"
+# Pinned release: the "continuous" tag is rebuilt in place and can break builds silently.
+APPIMAGETOOL_VERSION="${APPIMAGETOOL_VERSION:-1.9.0}"
+
+echo ">> Fetching appimagetool ${APPIMAGETOOL_VERSION}"
+TOOL="${OUT_DIR}/appimagetool-${APPIMAGETOOL_VERSION}-x86_64.AppImage"
 if [ ! -f "${TOOL}" ]; then
     curl -fsSL -o "${TOOL}" \
-        "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+        "https://github.com/AppImage/appimagetool/releases/download/${APPIMAGETOOL_VERSION}/appimagetool-x86_64.AppImage"
     chmod +x "${TOOL}"
 fi
 

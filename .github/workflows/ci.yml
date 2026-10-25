@@ -56,7 +56,6 @@ jobs:
 
       - name: Build AppImage (Linux)
         if: matrix.os == 'ubuntu-latest'
-        continue-on-error: true
         run: bash packaging/linux/build-appimage.sh artifacts/${{ matrix.rid }}
 
       - name: Upload artifacts
@@ -65,5 +64,5 @@ jobs:
           name: DowModManager-${{ matrix.rid }}
           path: |
             artifacts/${{ matrix.rid }}
-            artifacts/*.AppImage
-          if-no-files-found: warn
+            artifacts/DoW_Mod_Manager-*.AppImage
+          if-no-files-found: error
