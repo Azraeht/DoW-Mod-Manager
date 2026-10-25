@@ -17,7 +17,10 @@ public enum LaunchRoute
     FlatpakSteam,
     /// <summary><c>xdg-open steam://run/&lt;appid&gt;//&lt;url-encoded args&gt;/</c> (last-resort Steam route).</summary>
     SteamUrl,
-    /// <summary><c>proton run &lt;exe&gt; &lt;args&gt;</c> with STEAM_COMPAT_DATA_PATH set.</summary>
+    /// <summary>
+    /// <c>proton run &lt;exe&gt; &lt;args&gt;</c> with STEAM_COMPAT_DATA_PATH set, inside the Steam
+    /// Linux Runtime when the Proton build requires one.
+    /// </summary>
     Proton,
     /// <summary><c>wine &lt;exe&gt; &lt;args&gt;</c> with an optional WINEPREFIX.</summary>
     Wine
@@ -63,21 +66,40 @@ public sealed class LinuxLaunchHost
     /// </summary>
     public Func<GameInstall, ProtonSelection?> SelectProton { get; init; }
 
+    /// <summary>
+    /// The Steam Linux Runtime a Proton script (first argument) requires, or null when it requires
+    /// none. Defaults to the script's toolmanifest and <see cref="ProtonToolResolver.FindRuntimeEntryPoint"/>
+    /// over the game's and the default Steam roots.
+    /// </summary>
+    public Func<string, GameInstall, SteamRuntimeRequirement?> ResolveRuntime { get; init; }
+
     public string HomeDirectory { get; init; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     public LinuxLaunchHost()
     {
         IsFlatpakSteamInstalled = DefaultIsFlatpakSteamInstalled;
         SelectProton = DefaultSelectProton;
+        ResolveRuntime = DefaultResolveRuntime;
     }
 
-    private ProtonSelection? DefaultSelectProton(GameInstall game)
+    private ProtonSelection? DefaultSelectProton(GameInstall game) =>
+        ProtonToolResolver.Select(game.SteamAppId, LinuxLaunchPlanner.CompatDataPath(game, this), SteamRoots(game));
+
+    private static SteamRuntimeRequirement? DefaultResolveRuntime(string protonScript, GameInstall game)
+    {
+        if (Path.GetDirectoryName(protonScript) is not { Length: > 0 } toolDir
+            || ProtonToolResolver.ReadRequiredToolAppId(toolDir) is not { } appId)
+            return null;
+        return new SteamRuntimeRequirement(appId, ProtonToolResolver.FindRuntimeEntryPoint(appId, SteamRoots(game)));
+    }
+
+    private static List<string> SteamRoots(GameInstall game)
     {
         var roots = new List<string>();
         if (!string.IsNullOrWhiteSpace(game.SteamRoot))
             roots.Add(game.SteamRoot!);
         roots.AddRange(SteamPaths.ExistingRoots());
-        return ProtonToolResolver.Select(game.SteamAppId, LinuxLaunchPlanner.CompatDataPath(game, this), roots);
+        return roots;
     }
 
     // ---- real-environment defaults ----------------------------------------------------------
@@ -225,7 +247,7 @@ public static class LinuxLaunchPlanner
 
     /// <summary>
     /// Builds the plan that runs a Windows program (e.g. a mod's Setup.exe) inside the game's
-    /// prefix: <c>proton run</c> against the game's compatdata, or Wine with the resolved prefix.
+    /// prefix: Proton against the game's compatdata (see <see cref="ProtonPlan"/>), or Wine with the resolved prefix.
     /// <c>DOWMM_WINEPREFIX</c> forces the Wine route with that prefix.
     /// </summary>
     public static LaunchPlan? BuildPrefixRunPlan(GameInstall game, string exePath, LinuxLaunchHost host, out string? error)
@@ -357,28 +379,80 @@ public static class LinuxLaunchPlanner
             : Path.Combine(host.HomeDirectory, ".steam", "steam");
 
     /// <summary>
-    /// <c>proton run &lt;exe&gt; &lt;args...&gt;</c>. <c>proton</c> is a Python script with a
-    /// shebang, so it is executed directly.
+    /// <c>proton run &lt;exe&gt; &lt;args...&gt;</c>, or, when the build requires a Steam Linux
+    /// Runtime (toolmanifest <c>require_tool_appid</c>), what Steam runs:
+    /// <c>_v2-entry-point --verb=waitforexitandrun -- proton waitforexitandrun &lt;exe&gt; &lt;args...&gt;</c>.
+    /// Outside its runtime, GE-Proton and Proton 9+ miss libraries on many hosts (32-bit FreeType:
+    /// NSIS installers fail). <c>proton</c> is a Python script with a shebang, so it is executed directly.
     /// </summary>
     private static LaunchPlan ProtonPlan(GameInstall game, string exePath, string protonPath,
         IEnumerable<string> args, string arguments, string workingDir, LinuxLaunchHost host, List<string> notes)
     {
         var compatData = CompatDataPath(game, host);
         var clientInstall = SteamClientRoot(game, host);
+        var runtime = host.ResolveRuntime(protonPath, game);
+        var entryPoint = runtime?.EntryPoint;
+        if (runtime is { EntryPoint: null })
+            notes.Add($"this Proton needs the Steam Linux Runtime (Steam app {runtime.AppId}), which is not installed; "
+                    + "running Proton without it, 32-bit programs may fail. Install the runtime from Steam");
 
-        var psi = NewStartInfo(protonPath, workingDir);
-        psi.ArgumentList.Add("run");
+        var psi = NewStartInfo(entryPoint ?? protonPath, workingDir);
+        if (entryPoint is not null)
+        {
+            psi.ArgumentList.Add("--verb=waitforexitandrun");
+            psi.ArgumentList.Add("--");
+            psi.ArgumentList.Add(protonPath);
+            psi.ArgumentList.Add("waitforexitandrun");
+        }
+        else
+            psi.ArgumentList.Add("run");
         psi.ArgumentList.Add(exePath);
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
 
         psi.Environment["STEAM_COMPAT_DATA_PATH"] = compatData;
         psi.Environment["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = clientInstall;
+        var steamHome = ProtonHome(clientInstall, host);
+        if (steamHome is not null)
+            psi.Environment["HOME"] = steamHome;
+        if (entryPoint is not null)
+        {
+            // What Steam sets so the container also sees folders outside its default shares.
+            psi.Environment["STEAM_COMPAT_INSTALL_PATH"] = game.InstallDir;
+            psi.Environment["STEAM_COMPAT_TOOL_PATHS"] = $"{Path.GetDirectoryName(protonPath)}:{Path.GetDirectoryName(entryPoint)}";
+            psi.Environment["STEAM_COMPAT_MOUNTS"] = $"{Path.GetDirectoryName(exePath)}:{compatData}";
+        }
 
-        var description = $"Proton: \"{protonPath}\" run \"{exePath}\" {arguments}".TrimEnd()
-                        + $" [STEAM_COMPAT_DATA_PATH={compatData}, STEAM_COMPAT_CLIENT_INSTALL_PATH={clientInstall}]"
+        var command = entryPoint is not null
+            ? $"\"{entryPoint}\" --verb=waitforexitandrun -- \"{protonPath}\" waitforexitandrun"
+            : $"\"{protonPath}\" run";
+        var description = $"Proton: {command} \"{exePath}\" {arguments}".TrimEnd()
+                        + $" [STEAM_COMPAT_DATA_PATH={compatData}, STEAM_COMPAT_CLIENT_INSTALL_PATH={clientInstall}"
+                        + (steamHome is not null ? $", HOME={steamHome}]" : "]")
                         + AppendNotes(notes);
         return new LaunchPlan { Route = LaunchRoute.Proton, StartInfo = psi, Description = description };
+    }
+
+    /// <summary>
+    /// HOME for Proton, or null to keep ours. Proton's Steam bridge (lsteamclient) loads
+    /// <c>$HOME/.steam/sdk64/steamclient.so</c>; snap and Flatpak Steam keep that link in their own
+    /// home (the folder holding <c>.local/share/Steam</c>), which Steam passes to Proton as HOME.
+    /// Without it, Proton's steam.exe crashes before starting the program.
+    /// </summary>
+    private static string? ProtonHome(string clientInstall, LinuxLaunchHost host)
+    {
+        var bridge = Path.Combine(".steam", "sdk64", "steamclient.so");
+        var clientSuffix = Path.DirectorySeparatorChar + Path.Combine(".local", "share", "Steam");
+        var root = Path.TrimEndingDirectorySeparator(clientInstall);
+        if (!root.EndsWith(clientSuffix, StringComparison.Ordinal))
+            return null;
+
+        var steamHome = root[..^clientSuffix.Length];
+        return steamHome != Path.TrimEndingDirectorySeparator(host.HomeDirectory)
+               && !host.FileExists(Path.Combine(host.HomeDirectory, bridge))
+               && host.FileExists(Path.Combine(steamHome, bridge))
+            ? steamHome
+            : null;
     }
 
     // ---- Wine -------------------------------------------------------------------------------

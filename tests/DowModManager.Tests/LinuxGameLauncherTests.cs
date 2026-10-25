@@ -46,7 +46,8 @@ namespace DowModManager.Tests
             string[]? dirs = null,
             bool flatpakSteam = false,
             bool steamUrlHandler = false,
-            string? installedProton = null) => new()
+            string? installedProton = null,
+            SteamRuntimeRequirement? runtime = null) => new()
         {
             GetEnvironmentVariable = name => env is not null && env.TryGetValue(name, out var v) ? v : null,
             FindOnPath = name => path is not null && path.TryGetValue(name, out var v) ? v : null,
@@ -55,6 +56,7 @@ namespace DowModManager.Tests
             IsFlatpakSteamInstalled = () => flatpakSteam,
             HasSteamUrlHandler = () => steamUrlHandler,
             SelectProton = _ => installedProton is null ? null : new ProtonSelection(installedProton, "test pick"),
+            ResolveRuntime = (_, _) => runtime,
             HomeDirectory = Home
         };
 
@@ -291,6 +293,89 @@ namespace DowModManager.Tests
             Assert.Equal(LaunchRoute.Proton, plan!.Route);
             Assert.Equal(["run", "/dl/Setup.exe"], plan.StartInfo.ArgumentList);
             Assert.Equal("/steam/steamapps/compatdata/9450", plan.StartInfo.Environment["STEAM_COMPAT_DATA_PATH"]);
+        }
+
+        private const string Sniper = "/steam/steamapps/common/SteamLinuxRuntime_sniper/_v2-entry-point";
+
+        [Fact]
+        public void PrefixRun_ProtonNeedingRuntime_RunsInsideIt()
+        {
+            var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(SteamGame(), "/dl/Setup.exe",
+                Host(installedProton: "/p/proton", runtime: new SteamRuntimeRequirement(1628350, Sniper)), out _);
+
+            Assert.NotNull(plan);
+            Assert.Equal(LaunchRoute.Proton, plan!.Route);
+            Assert.Equal(Sniper, plan.StartInfo.FileName);
+            Assert.Equal(["--verb=waitforexitandrun", "--", "/p/proton", "waitforexitandrun", "/dl/Setup.exe"],
+                         plan.StartInfo.ArgumentList);
+            Assert.Equal("/steam/steamapps/compatdata/9450", plan.StartInfo.Environment["STEAM_COMPAT_DATA_PATH"]);
+            Assert.Equal("/p:/steam/steamapps/common/SteamLinuxRuntime_sniper", plan.StartInfo.Environment["STEAM_COMPAT_TOOL_PATHS"]);
+            Assert.Equal("/dl:/steam/steamapps/compatdata/9450", plan.StartInfo.Environment["STEAM_COMPAT_MOUNTS"]);
+            Assert.Equal(SteamGame().InstallDir, plan.StartInfo.Environment["STEAM_COMPAT_INSTALL_PATH"]);
+            Assert.Contains(Sniper, plan.Description);
+        }
+
+        [Fact]
+        public void ProtonOverride_NeedingRuntime_LaunchesGameInsideIt()
+        {
+            var host = Host(env: new() { ["DOWMM_PROTON"] = "/opt/GE-Proton9/proton" },
+                            files: ["/opt/GE-Proton9/proton"],
+                            runtime: new SteamRuntimeRequirement(1628350, Sniper));
+
+            var plan = Plan(SteamGame(), host);
+
+            Assert.Equal(Sniper, plan.StartInfo.FileName);
+            Assert.Equal(["--verb=waitforexitandrun", "--", "/opt/GE-Proton9/proton", "waitforexitandrun",
+                          SteamGame().ExecutablePath, "-modname", "W40k", "-nomovies"],
+                         plan.StartInfo.ArgumentList);
+        }
+
+        [Fact]
+        public void ProtonNeedingMissingRuntime_RunsDirectlyWithNote()
+        {
+            var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(SteamGame(), "/dl/Setup.exe",
+                Host(installedProton: "/p/proton", runtime: new SteamRuntimeRequirement(1628350, null)), out _);
+
+            Assert.NotNull(plan);
+            Assert.Equal("/p/proton", plan!.StartInfo.FileName);
+            Assert.Equal(["run", "/dl/Setup.exe"], plan.StartInfo.ArgumentList);
+            Assert.False(plan.StartInfo.Environment.ContainsKey("STEAM_COMPAT_TOOL_PATHS"));
+            Assert.Contains("Steam app 1628350", plan.Description);
+        }
+
+        private const string SnapHome = Home + "/snap/steam/common";
+
+        private static GameInstall SnapSteamGame() => new()
+        {
+            InstallDir = "/lib/steamapps/common/Dawn of War Definitive Edition",
+            ExecutableName = "W40k.exe",
+            Variant = GameVariant.DefinitiveEdition,
+            Distribution = GameDistribution.Steam,
+            SteamAppId = 3556750,
+            ProtonPrefix = "/lib/steamapps/compatdata/3556750",
+            SteamRoot = SnapHome + "/.local/share/Steam"
+        };
+
+        [Fact]
+        public void PrefixRun_SnapSteam_GivesProtonTheSnapHome()
+        {
+            var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(SnapSteamGame(), "/dl/Setup.exe",
+                Host(files: [SnapHome + "/.steam/sdk64/steamclient.so"], installedProton: "/p/proton"), out _);
+
+            Assert.NotNull(plan);
+            Assert.Equal(SnapHome, plan!.StartInfo.Environment["HOME"]);
+            Assert.Contains("HOME=" + SnapHome, plan.Description);
+        }
+
+        [Fact]
+        public void PrefixRun_SteamBridgeInOwnHome_KeepsHome()
+        {
+            var plan = LinuxLaunchPlanner.BuildPrefixRunPlan(SnapSteamGame(), "/dl/Setup.exe",
+                Host(files: [SnapHome + "/.steam/sdk64/steamclient.so", Home + "/.steam/sdk64/steamclient.so"],
+                     installedProton: "/p/proton"), out _);
+
+            Assert.NotNull(plan);
+            Assert.NotEqual(SnapHome, plan!.StartInfo.Environment["HOME"]);
         }
 
         [Fact]

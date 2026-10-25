@@ -199,5 +199,55 @@ namespace DowModManager.Tests
             Assert.Equal("C:\\Games", vdf.Find("a")!.GetString("path"));
             Assert.Equal("x", vdf.Find("b")!.GetString("NAME"));
         }
+
+        // ---- Steam Linux Runtime ----------------------------------------------------------
+
+        [Fact]
+        public void RequiredToolAppId_IsReadFromToolManifest()
+        {
+            var ge = Path.GetDirectoryName(CustomTool("GE-Proton10-34", "GE-Proton10-34", "GE-Proton10-34"))!;
+            File.WriteAllText(Path.Combine(ge, "toolmanifest.vdf"),
+                "\"manifest\"\n{\n  \"version\" \"2\"\n  \"commandline\" \"/proton %verb%\"\n  \"require_tool_appid\" \"1628350\"\n}\n");
+            var old = Path.GetDirectoryName(ValveTool("Proton 5.13", "5.13-6"))!;
+
+            Assert.Equal(1628350, ProtonToolResolver.ReadRequiredToolAppId(ge));
+            Assert.Null(ProtonToolResolver.ReadRequiredToolAppId(old));
+            Assert.Null(ProtonToolResolver.ReadRequiredToolAppId(Path.Combine(_steam, "missing")));
+        }
+
+        private string Runtime(string library, string installDir, bool withEntryPoint = true)
+        {
+            var steamApps = Path.Combine(library, "steamapps");
+            var dir = Path.Combine(steamApps, "common", installDir);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(steamApps, "appmanifest_1628350.acf"),
+                $"\"AppState\"\n{{\n\t\"appid\"\t\t\"1628350\"\n\t\"installdir\"\t\t\"{installDir}\"\n}}\n");
+            var entryPoint = Path.Combine(dir, "_v2-entry-point");
+            if (withEntryPoint)
+                File.WriteAllText(entryPoint, "#!/bin/sh\n");
+            return entryPoint;
+        }
+
+        [Fact]
+        public void RuntimeEntryPoint_IsFoundThroughAppManifest_InAnyLibrary()
+        {
+            var library = Path.Combine(_steam, "library2");
+            Directory.CreateDirectory(Path.Combine(_steam, "steamapps"));
+            File.WriteAllText(Path.Combine(_steam, "steamapps", "libraryfolders.vdf"),
+                $"\"libraryfolders\"\n{{\n\t\"1\"\n\t{{\n\t\t\"path\"\t\t\"{library}\"\n\t}}\n}}\n");
+            var entryPoint = Runtime(library, "SteamLinuxRuntime_sniper");
+
+            Assert.Equal(entryPoint, ProtonToolResolver.FindRuntimeEntryPoint(1628350, [_steam]));
+        }
+
+        [Fact]
+        public void RuntimeEntryPoint_MissingOrWithoutEntryPoint_IsNull()
+        {
+            Directory.CreateDirectory(_steam);
+            Assert.Null(ProtonToolResolver.FindRuntimeEntryPoint(1628350, [_steam]));
+
+            Runtime(_steam, "SteamLinuxRuntime", withEntryPoint: false);
+            Assert.Null(ProtonToolResolver.FindRuntimeEntryPoint(1628350, [_steam]));
+        }
     }
 }

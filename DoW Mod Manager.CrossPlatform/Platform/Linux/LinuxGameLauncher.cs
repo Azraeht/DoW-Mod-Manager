@@ -18,7 +18,8 @@ namespace DoW_Mod_Manager.Platform.Linux;
 /// (native, or snap via <c>/snap/bin/steam</c>), then
 /// <c>flatpak run com.valvesoftware.Steam -applaunch</c> (Flatpak Steam), then
 /// <c>xdg-open steam://run/&lt;appid&gt;//&lt;args&gt;/</c> when only a URL handler is registered.</item>
-/// <item>Otherwise the newest installed Proton is run directly (<c>proton run</c>).</item>
+/// <item>Otherwise the newest installed Proton is run directly (<c>proton run</c>), inside the
+/// Steam Linux Runtime container its toolmanifest requires, as Steam does.</item>
 /// <item>Last resort: plain Wine (GOG installs via Heroic/Lutris/Bottles, or plain wine).</item>
 /// </list>
 /// When Steam (or Proton) starts the game, the started process is not the game, so after
@@ -186,7 +187,7 @@ public sealed class LinuxGameLauncher : IGameLauncher
 
     /// <summary>
     /// Runs a Windows program (e.g. a mod's Setup.exe) inside the game's prefix:
-    /// <c>proton run</c> with STEAM_COMPAT_DATA_PATH pointing at the game's compatdata, or Wine
+    /// Proton (in its Steam Linux Runtime) with STEAM_COMPAT_DATA_PATH pointing at the game's compatdata, or Wine
     /// with the resolved WINEPREFIX. Does not wait for the program to finish.
     /// </summary>
     public Task<GameLaunchResult> RunInGamePrefixAsync(GameInstall game, string exePath, CancellationToken ct = default)

@@ -27,6 +27,12 @@ public sealed class ProtonTool
 public sealed record ProtonSelection(string ScriptPath, string Reason);
 
 /// <summary>
+/// The Steam Linux Runtime (Steam app <see cref="AppId"/>, e.g. 1628350 "sniper") a Proton build
+/// must run in; <see cref="EntryPoint"/> is its <c>_v2-entry-point</c>, null when not installed.
+/// </summary>
+public sealed record SteamRuntimeRequirement(int AppId, string? EntryPoint);
+
+/// <summary>
 /// Picks the Proton build to run directly for a game, mirroring what Steam would use:
 /// <list type="number">
 /// <item>the per-game <c>CompatToolMapping</c> entry of <c>&lt;steamroot&gt;/config/config.vdf</c>;</item>
@@ -184,6 +190,39 @@ public static partial class ProtonToolResolver
         var major = m.Groups[1].Value;
         var minor = m.Groups[2].Success ? m.Groups[2].Value : "0";
         return minor == "0" ? $"proton_{major}" : $"proton_{major}{minor}";
+    }
+
+    // ---- Steam Linux Runtime ----------------------------------------------------------------
+
+    /// <summary>
+    /// <c>require_tool_appid</c> of a tool's <c>toolmanifest.vdf</c>: the Steam Linux Runtime Steam
+    /// starts the tool in. Null when the tool declares none (old Proton builds).
+    /// </summary>
+    public static int? ReadRequiredToolAppId(string toolDirectory) =>
+        int.TryParse(TextVdf.TryParseFile(Path.Combine(toolDirectory, "toolmanifest.vdf"))
+                            ?.Find("manifest")?.GetString("require_tool_appid"), out var appId)
+            ? appId
+            : null;
+
+    /// <summary>
+    /// The <c>_v2-entry-point</c> of the runtime installed as Steam app <paramref name="appId"/>,
+    /// found through its <c>appmanifest_&lt;appid&gt;.acf</c> in any library of
+    /// <paramref name="steamRoots"/>. Null when it is not installed or has no entry point (scout).
+    /// </summary>
+    public static string? FindRuntimeEntryPoint(int appId, IEnumerable<string> steamRoots)
+    {
+        foreach (var library in steamRoots.SelectMany(SteamPaths.ReadLibraryFolders).Distinct(StringComparer.Ordinal))
+        {
+            var steamApps = Path.Combine(library, "steamapps");
+            var installDir = TextVdf.TryParseFile(Path.Combine(steamApps, $"appmanifest_{appId}.acf"))
+                                    ?.Find("AppState")?.GetString("installdir");
+            if (string.IsNullOrWhiteSpace(installDir))
+                continue;
+            var entryPoint = Path.Combine(steamApps, "common", installDir, "_v2-entry-point");
+            if (File.Exists(entryPoint))
+                return entryPoint;
+        }
+        return null;
     }
 
     // ---- Steam config -----------------------------------------------------------------------
