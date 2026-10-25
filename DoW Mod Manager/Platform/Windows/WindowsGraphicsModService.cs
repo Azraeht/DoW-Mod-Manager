@@ -12,7 +12,7 @@ namespace DoW_Mod_Manager.Platform.Windows;
 /// <c>ModManagerForm.DxvkButton_Click</c>:
 /// <list type="bullet">
 ///   <item>"installed" = all four DXVK files present in the install dir
-///         (legacy check: <c>dxvk.conf</c> + <c>d3d9.dll</c> + <c>dxgi.dll</c> + <c>dxvk.version</c>).</item>
+///         (legacy check: <c>dxvk.conf</c> + <c>d3d9.dll</c> + <c>d3d8.dll</c> + <c>dxvk.version</c>).</item>
 ///   <item>install = ensure the files are present/enabled in the install dir.</item>
 ///   <item>remove = delete those four files (legacy <c>File.Delete</c> calls).</item>
 /// </list>
@@ -26,7 +26,7 @@ public sealed class WindowsGraphicsModService : IGraphicsModService
     static readonly string[] DxvkFiles =
     {
         "d3d9.dll",
-        "dxgi.dll",
+        "d3d8.dll",
         "dxvk.conf",
         "dxvk.version"
     };
@@ -35,7 +35,7 @@ public sealed class WindowsGraphicsModService : IGraphicsModService
 
     public Task<bool> IsDxvkInstalledAsync(GameInstall game, CancellationToken ct = default)
     {
-        // Legacy: File.Exists("dxvk.conf") && d3d9.dll && dxgi.dll && dxvk.version — all four.
+        // Legacy: File.Exists("dxvk.conf") && d3d9.dll && d3d8.dll && dxvk.version — all four.
         bool allPresent = true;
         foreach (string file in DxvkFiles)
         {
