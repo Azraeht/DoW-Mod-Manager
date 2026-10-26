@@ -34,6 +34,15 @@
     <!-- Single-file publish must embed SkiaSharp/HarfBuzz native libs, otherwise
          Avalonia fails at startup with DllNotFoundException: libSkiaSharp. -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Windows publish: one standalone, compressed EXE by default, so a plain `dotnet publish
+         -f net10.0-windows` (or Visual Studio's Publish) needs no extra options. Linux is left
+         uncompressed: the AppImage already compresses its contents. -->
+    <RuntimeIdentifier Condition="'$(TargetFramework)' == 'net10.0-windows' and '$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <SelfContained Condition="'$(TargetFramework)' == 'net10.0-windows'">true</SelfContained>
+    <PublishSingleFile Condition="'$(TargetFramework)' == 'net10.0-windows'">true</PublishSingleFile>
+    <EnableCompressionInSingleFile Condition="'$(TargetFramework)' == 'net10.0-windows'">true</EnableCompressionInSingleFile>
+    <!-- Symbols inside the EXE, so crash stack traces have file names and line numbers. -->
+    <DebugType Condition="'$(TargetFramework)' == 'net10.0-windows' and '$(Configuration)' == 'Release'">embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
