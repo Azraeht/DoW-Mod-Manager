@@ -3,7 +3,7 @@
 # DoW Mod Manager v2.7.0.1-linux.1
 
 > **Linux port.** This fork ports [IgorTheLight/DoW-Mod-Manager](https://github.com/IgorTheLight/DoW-Mod-Manager)
-> (itself a fork of [Fragjacker/DoW-Mod-Manager](https://github.com/Fragjacker/DoW-Mod-Manager)) to .NET 8 + Avalonia.
+> (itself a fork of [Fragjacker/DoW-Mod-Manager](https://github.com/Fragjacker/DoW-Mod-Manager)) to .NET 10 + Avalonia.
 > The version is the upstream base it is built on (`2.7.0.1`) plus a port release counter (`-linux.1`).
 > Releases of this port are published at <https://github.com/Azraeht/DoW-Mod-Manager/releases>;
 > the Windows `.exe` described in the Windows section below is upstream's build, not this port's.
@@ -26,7 +26,7 @@ This application allows for an easy launch of mods and management of large colle
 
 ## INSTALLATION (Linux — native):
 
-This port (2.7.0.1-linux.x) runs the Mod Manager **natively on Linux** (.NET 8 + Avalonia). It no
+This port (2.7.0.1-linux.x) runs the Mod Manager **natively on Linux** (.NET 10 + Avalonia). It no
 longer needs to sit inside the game folder, and you do **not** have to configure Wine
 yourself — the manager detects your Steam/Proton installation and launches the game
 through Proton (falling back to plain Wine). The game itself stays a Windows executable run
@@ -100,7 +100,7 @@ instead of Proton's own. When the manager starts the game through Proton or Wine
 on its own; if it does not, add `WINEDLLOVERRIDES="d3d9,d3d8=n,b" %command%` to the game's Steam
 launch options. DXVK and dgVoodoo2 both provide `d3d9.dll`, so installing one removes the other.
 
-> Building from source: `dotnet publish "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -f net8.0 -r
+> Building from source: `dotnet publish "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -f net10.0 -r
 > linux-x64 --self-contained -p:PublishSingleFile=true -o artifacts/linux-x64`, then
 > `bash packaging/linux/build-appimage.sh artifacts/linux-x64`. See `docs/ARCHITECTURE.md`.
 

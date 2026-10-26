@@ -34,7 +34,7 @@ APPIMAGE="${OUT_DIR}/DoW_Mod_Manager-${VERSION}-x86_64.AppImage"
 
 if [ ! -x "${PUBLISH_DIR}/${BIN_NAME}" ]; then
     echo "error: ${PUBLISH_DIR}/${BIN_NAME} not found. Publish first:" >&2
-    echo "  dotnet publish \"DoW Mod Manager.CrossPlatform/DowModManager.csproj\" -f net8.0 -r linux-x64 --self-contained -p:PublishSingleFile=true -o ${PUBLISH_DIR}" >&2
+    echo "  dotnet publish \"DoW Mod Manager.CrossPlatform/DowModManager.csproj\" -f net10.0 -r linux-x64 --self-contained -p:PublishSingleFile=true -o ${PUBLISH_DIR}" >&2
     exit 1
 fi
 

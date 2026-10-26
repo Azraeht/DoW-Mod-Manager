@@ -2,7 +2,7 @@
 
 Baseline: upstream **IgorTheLight/DoW-Mod-Manager `master` @ `a5a9b2f` (v2.7.0.1)**, whose
 WinForms sources live unchanged in `DoW Mod Manager/` (reference only, never compiled into the
-port). Line numbers refer to those files. The "Port" column says where the .NET 8 + Avalonia port
+port). Line numbers refer to those files. The "Port" column says where the .NET 10 + Avalonia port
 (`DoW Mod Manager.CrossPlatform/DowModManager.csproj`) stands today.
 
 ## 1. Project, framework, UI
@@ -10,11 +10,11 @@ port). Line numbers refer to those files. The "Port" column says where the .NET 
 | | Upstream 2.7.0.1 | Port |
 |---|---|---|
 | Project | `DoW Mod Manager/DoW Mod Manager.csproj` (old-style) | `DoW Mod Manager.CrossPlatform/DowModManager.csproj` (SDK-style) |
-| Target framework | **.NET Framework 4.8** (`TargetFrameworkVersion v4.8`), Windows-only | `net8.0` everywhere, plus `net8.0-windows` when built on Windows |
+| Target framework | **.NET Framework 4.8** (`TargetFrameworkVersion v4.8`), Windows-only | `net10.0` everywhere, plus `net10.0-windows` when built on Windows |
 | UI | **WinForms** (`System.Windows.Forms`, `*.Designer.cs` + `*.resx`) | **Avalonia 11.2** + CommunityToolkit.Mvvm |
 | Assembly name | `DoW Mod Manager v2.7.0.1` (version is in the .exe name) | `DowModManager` |
 | COM | `IWshRuntimeLibrary` (Windows Script Host, `.lnk` shortcuts) | none; Windows shortcut in `Platform/Windows/WindowsFileSystemService.cs`, `.desktop` file on Linux |
-| Other Windows refs | `System.Management` (WMI), `System.Deployment` | `System.Management` + `Microsoft.Win32.Registry` only under `net8.0-windows` |
+| Other Windows refs | `System.Management` (WMI), `System.Deployment` | `System.Management` only under `net10.0-windows` (the Registry API is built into it) |
 
 ## 2. P/Invoke (`DllImport`)
 
@@ -49,7 +49,7 @@ registry (`user.reg`), but this is not planned.
 | Upstream location | What | Port |
 |---|---|---|
 | everywhere (`File.Exists("dxvk.conf")`, `"d3d9.dll"`, …) | Relative paths: the cwd **must** be the game folder | absolute paths from `GameInstall.InstallDir` |
-| `ModManagerForm.cs:413-427` | `%WINDIR%\Microsoft.NET\Framework\v4.0.30319\ngen.exe` (AOT/NGEN toggle) | dropped (no NGEN on .NET 8) |
+| `ModManagerForm.cs:413-427` | `%WINDIR%\Microsoft.NET\Framework\v4.0.30319\ngen.exe` (AOT/NGEN toggle) | dropped (no NGEN on .NET 10) |
 | `ModManagerForm.cs:1459,1467` | `explorer.exe <dir>` | `IFileSystemService.OpenFolder` → `xdg-open` on Linux |
 | `DownloadHelper.cs:226` | `cmd.exe /C choice … & Del "<old exe>"` (self-delete after update) | dropped with the updater |
 | `DownloadHelper.cs:236-237` | `.lnk` shortcut via WScript | `.desktop` entry on Linux |

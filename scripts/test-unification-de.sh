@@ -78,7 +78,7 @@ cmd_build() {
     log "Tests"
     dotnet test tests/DowModManager.Tests/DowModManager.Tests.csproj --nologo -v quiet
     log "Publish to $PUBLISH_DIR"
-    dotnet publish "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -f net8.0 -r linux-x64 \
+    dotnet publish "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -f net10.0 -r linux-x64 \
         --self-contained -p:PublishSingleFile=true -o "$PUBLISH_DIR" --nologo -v quiet
     log "AppImage"
     bash packaging/linux/build-appimage.sh "$PUBLISH_DIR"

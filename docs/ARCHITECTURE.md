@@ -1,6 +1,6 @@
 # DoW Mod Manager — native port architecture (WS0)
 
-This document records the **frozen contracts** for the .NET 8 + Avalonia port
+This document records the **frozen contracts** for the .NET 10 + Avalonia port
 (epic [#1](https://github.com/Azraeht/DoW-Mod-Manager/issues/1)). Once WS0 is merged,
 the interfaces in `Abstractions/` and the models in `Models/` **do not change** without a
 discussion on issue #2. Every other workstream codes against them.
@@ -16,7 +16,7 @@ DoW Mod Manager/                 upstream app, untouched: its sources, DXVK/, dg
                                  CAMERA/, ModList/, LatestStable/ (the port downloads these
                                  folders from upstream at run time)
 DowModManager.sln                the port + its tests
-DoW Mod Manager.CrossPlatform/   the port (.NET 8 + Avalonia)
+DoW Mod Manager.CrossPlatform/   the port (.NET 10 + Avalonia)
 tests/  packaging/  docs/  .github/
 ```
 
@@ -32,8 +32,8 @@ Fork-only values (version suffix, project URL) live in
 
 Single multi-targeted project `DoW Mod Manager.CrossPlatform/DowModManager.csproj`:
 
-- `net8.0` — built everywhere (Linux dev + CI).
-- `net8.0-windows` — added automatically on Windows / CI; the **only** TFM that compiles
+- `net10.0` — built everywhere (Linux dev + CI).
+- `net10.0-windows` — added automatically on Windows / CI; the **only** TFM that compiles
   `Platform/Windows/**` (P/Invoke, Registry, WMI). Guard Windows code with the `WINDOWS`
   compile constant or `[SupportedOSPlatform("windows")]`.
 
@@ -43,7 +43,7 @@ DoW Mod Manager.CrossPlatform/
   Models/            GameInstall, LaunchOptions, ModInfo, ...  (WS0, frozen)
   Platform/
     Stubs/           safe no-op impl (default until WS7)
-    Windows/         WS1  — compiled only on net8.0-windows
+    Windows/         WS1  — compiled only on net10.0-windows
     Linux/           WS2  — Proton/Wine launcher, Steam discovery
   Services/          WS3  — cross-platform domain logic
   ViewModels/        WS4 (base + shell) + WS5 (feature VMs)
@@ -125,9 +125,9 @@ via constructor injection and stay UI-framework-agnostic (no Avalonia types in V
 ```bash
 export PATH="$HOME/.dotnet:$PATH"
 dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj"
-dotnet run    --project "DoW Mod Manager.CrossPlatform/DowModManager.csproj" --framework net8.0
+dotnet run    --project "DoW Mod Manager.CrossPlatform/DowModManager.csproj" --framework net10.0
 # Windows target, compiled (not run) from Linux:
-dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -p:TargetFrameworks=net8.0-windows -p:EnableWindowsTargeting=true
+dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -p:TargetFrameworks=net10.0-windows -p:EnableWindowsTargeting=true
 ```
 
 ## Feature windows (WS5)

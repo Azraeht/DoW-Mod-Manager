@@ -7,7 +7,7 @@ namespace DoW_Mod_Manager.ViewModels;
 
 /// <summary>
 /// Port of the legacy <c>AboutForm</c>. The .NET Framework JIT/NGEN options and the in-place .exe
-/// self-update are gone (meaningless on .NET 8 / Linux); "check for updates" opens the releases page.
+/// self-update are gone (meaningless on .NET 10 / Linux); "check for updates" opens the releases page.
 /// </summary>
 public partial class AboutViewModel : ViewModelBase
 {
