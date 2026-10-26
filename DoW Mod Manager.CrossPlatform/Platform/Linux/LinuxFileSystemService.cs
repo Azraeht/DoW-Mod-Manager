@@ -107,7 +107,7 @@ public sealed class LinuxFileSystemService : IFileSystemService
     private static void MakeExecutable(string file)
     {
         // SetUnixFileMode is a Unix-only API; this service only ever runs on Linux, but guard
-        // the call so the analyzer is satisfied on the cross-platform net8.0 target.
+        // the call so the analyzer is satisfied on the cross-platform net10.0 target.
         if (OperatingSystem.IsWindows())
             return;
 

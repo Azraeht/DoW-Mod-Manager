@@ -1,6 +1,6 @@
 # DoW Mod Manager — cross-platform edition architecture
 
-This document describes the .NET 8 + Avalonia edition in `DoW Mod Manager.CrossPlatform/`.
+This document describes the .NET 10 + Avalonia edition in `DoW Mod Manager.CrossPlatform/`.
 The interfaces in `Abstractions/` and the models in `Models/` are the contracts every other
 layer codes against; change them deliberately. (The WS0–WS7 labels in code comments name the
 work packages the port was built in.)
@@ -16,7 +16,7 @@ DoW Mod Manager/                 WinForms app: its sources, DXVK/, dgVoodoo2/, F
                                  ModList/, LatestStable/ (the cross-platform edition downloads
                                  these folders from GitHub at run time, like the WinForms app)
 DowModManager.sln                cross-platform edition + its tests
-DoW Mod Manager.CrossPlatform/   cross-platform edition (.NET 8 + Avalonia)
+DoW Mod Manager.CrossPlatform/   cross-platform edition (.NET 10 + Avalonia)
 tests/  packaging/  docs/  .github/
 ```
 
@@ -31,8 +31,8 @@ Distribution-specific values (version suffix, project URL) live in
 
 Single multi-targeted project `DoW Mod Manager.CrossPlatform/DowModManager.csproj`:
 
-- `net8.0` — built everywhere (Linux dev + CI).
-- `net8.0-windows` — added automatically on Windows / CI; the **only** TFM that compiles
+- `net10.0` — built everywhere (Linux dev + CI).
+- `net10.0-windows` — added automatically on Windows / CI; the **only** TFM that compiles
   `Platform/Windows/**` (P/Invoke, Registry, WMI). Guard Windows code with the `WINDOWS`
   compile constant or `[SupportedOSPlatform("windows")]`.
 
@@ -42,7 +42,7 @@ DoW Mod Manager.CrossPlatform/
   Models/            GameInstall, LaunchOptions, ModInfo, ...  (WS0, frozen)
   Platform/
     Stubs/           safe no-op impl (default until WS7)
-    Windows/         WS1  — compiled only on net8.0-windows
+    Windows/         WS1  — compiled only on net10.0-windows
     Linux/           WS2  — Proton/Wine launcher, Steam discovery
   Services/          WS3  — cross-platform domain logic
   ViewModels/        WS4 (base + shell) + WS5 (feature VMs)
@@ -124,9 +124,9 @@ via constructor injection and stay UI-framework-agnostic (no Avalonia types in V
 ```bash
 export PATH="$HOME/.dotnet:$PATH"
 dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj"
-dotnet run    --project "DoW Mod Manager.CrossPlatform/DowModManager.csproj" --framework net8.0
+dotnet run    --project "DoW Mod Manager.CrossPlatform/DowModManager.csproj" --framework net10.0
 # Windows target, compiled (not run) from Linux:
-dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -p:TargetFrameworks=net8.0-windows -p:EnableWindowsTargeting=true
+dotnet build  "DoW Mod Manager.CrossPlatform/DowModManager.csproj" -p:TargetFrameworks=net10.0-windows -p:EnableWindowsTargeting=true
 ```
 
 ## Feature windows (WS5)

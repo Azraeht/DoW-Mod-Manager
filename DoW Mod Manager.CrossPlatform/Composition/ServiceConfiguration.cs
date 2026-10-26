@@ -31,7 +31,7 @@ public static class ServiceConfiguration
     /// Selects the OS-specific <see cref="IPlatformService"/>: <c>WindowsPlatformService</c>
     /// (WS1) on Windows, <c>LinuxPlatformService</c> (WS2) on Linux, otherwise a safe no-op
     /// stub. The Windows registration is behind <c>#if WINDOWS</c> because its P/Invoke code
-    /// only compiles under the net8.0-windows target.
+    /// only compiles under the net10.0-windows target.
     /// </summary>
     public static IServiceCollection AddPlatformServices(this IServiceCollection services)
     {
