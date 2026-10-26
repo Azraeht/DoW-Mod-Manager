@@ -14,7 +14,7 @@ port). Line numbers refer to those files. The "Port" column says where the .NET 
 | UI | **WinForms** (`System.Windows.Forms`, `*.Designer.cs` + `*.resx`) | **Avalonia 11.2** + CommunityToolkit.Mvvm |
 | Assembly name | `DoW Mod Manager v2.7.0.1` (version is in the .exe name) | `DowModManager` |
 | COM | `IWshRuntimeLibrary` (Windows Script Host, `.lnk` shortcuts) | none; Windows shortcut in `Platform/Windows/WindowsFileSystemService.cs`, `.desktop` file on Linux |
-| Other Windows refs | `System.Management` (WMI), `System.Deployment` | `System.Management` only under `net10.0-windows` (the Registry API is built into it) |
+| Other Windows refs | `System.Management` (WMI), `System.Deployment` | none: the Registry API is built into `net10.0-windows`; WMI is replaced (see below) |
 
 ## 2. P/Invoke (`DllImport`)
 
@@ -52,8 +52,8 @@ registry (`user.reg`), but this is not planned.
 | `ModManagerForm.cs:413-427` | `%WINDIR%\Microsoft.NET\Framework\v4.0.30319\ngen.exe` (AOT/NGEN toggle) | dropped (no NGEN on .NET 10) |
 | `ModManagerForm.cs:1459,1467` | `explorer.exe <dir>` | `IFileSystemService.OpenFolder` → `xdg-open` on Linux |
 | `DownloadHelper.cs:226` | `cmd.exe /C choice … & Del "<old exe>"` (self-delete after update) | dropped with the updater |
-| `DownloadHelper.cs:236-237` | `.lnk` shortcut via WScript | `.desktop` entry on Linux |
-| `SettingsManagerForm.cs:700` | WMI `SELECT * FROM Win32_VideoController` (VRAM/GPU) | `WindowsGpuInfoService` / `LinuxGpuInfoService` (`/sys/class/drm`, `lspci`) |
+| `DownloadHelper.cs:236-237` | `.lnk` shortcut via WScript | ShellLink COM object (`IShellLinkW`) on Windows, `.desktop` entry on Linux |
+| `SettingsManagerForm.cs:700` | WMI `SELECT * FROM Win32_VideoController` (VRAM/GPU) | `WindowsGpuInfoService` (user32 `EnumDisplayDevices`) / `LinuxGpuInfoService` (`/sys/class/drm`, `lspci`) |
 | `ModManagerForm.cs:1036-1037` | `PriorityClass = High`, `ProcessorAffinity = 0x6` on the game process | Windows only. On Linux the game is a Wine process, found by `GameProcessFinder`, and affinity is not applied. |
 | `*.module`, `Local.ini`, `warnings.log` | `\` separators, case-insensitive FS, CRLF | `GamePaths` resolves case-insensitively; INI written with CRLF |
 | DE user data | `%APPDATA%\Relic Entertainment\Dawn of War` | `GameVariantDetector.ProtonAppDataDir` (`compatdata/<appid>/pfx/drive_c/users/steamuser/AppData/Roaming`) |

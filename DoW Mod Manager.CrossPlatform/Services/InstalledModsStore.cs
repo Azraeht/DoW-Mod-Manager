@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace DoW_Mod_Manager.Services
 {
@@ -25,15 +26,19 @@ namespace DoW_Mod_Manager.Services
     /// JSON file in the manager's data folder: install records per game folder and module, and the
     /// file names seen for each download link (to find an earlier download again).
     /// </summary>
-    public sealed class InstalledModsStore
+    public sealed partial class InstalledModsStore
     {
-        private sealed class Data
+        internal sealed class Data
         {
             public Dictionary<string, InstalledModRecord> Mods { get; set; } = new(StringComparer.Ordinal);
             public Dictionary<string, string> Downloads { get; set; } = new(StringComparer.Ordinal);
         }
 
-        private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+        /// <summary>Source-generated serializer (reflection-based JSON does not survive trimming).</summary>
+        [JsonSourceGenerationOptions(WriteIndented = true)]
+        [JsonSerializable(typeof(Data))]
+        private sealed partial class JsonContext : JsonSerializerContext;
+
         private readonly string _path;
         private readonly object _lock = new();
 
@@ -71,7 +76,7 @@ namespace DoW_Mod_Manager.Services
                 change(data);
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
                 string tmp = _path + ".tmp";
-                File.WriteAllText(tmp, JsonSerializer.Serialize(data, JsonOptions));
+                File.WriteAllText(tmp, JsonSerializer.Serialize(data, JsonContext.Default.Data));
                 File.Move(tmp, _path, overwrite: true);
             }
         }
@@ -82,7 +87,7 @@ namespace DoW_Mod_Manager.Services
             {
                 if (!File.Exists(_path))
                     return new Data();
-                var data = JsonSerializer.Deserialize<Data>(File.ReadAllText(_path)) ?? new Data();
+                var data = JsonSerializer.Deserialize(File.ReadAllText(_path), JsonContext.Default.Data) ?? new Data();
                 data.Mods = new Dictionary<string, InstalledModRecord>(data.Mods, StringComparer.Ordinal);
                 return data;
             }

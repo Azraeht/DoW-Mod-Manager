@@ -5,7 +5,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <!-- Linux/macOS dev builds target net10.0 only; Windows & CI also build the
-         Windows-specific TFM so the P/Invoke / WMI / Registry code compiles. -->
+         Windows-specific TFM so the P/Invoke / COM / Registry code compiles. -->
     <TargetFrameworks>net10.0</TargetFrameworks>
     <TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net10.0;net10.0-windows</TargetFrameworks>
     <Nullable>enable</Nullable>
@@ -24,6 +24,13 @@
     <!-- Avalonia: keep the compiled XAML name generator happy -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <!-- LibraryImport / GeneratedComInterface (Windows shortcut code) generate unsafe code. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- Publish only what is reachable from Main: about a third of the size. Code that uses
+         reflection the trimmer cannot follow produces IL2xxx warnings; they fail the publish so a
+         trimmed build behaves like an untrimmed one. -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
     <!-- Single-file publish must embed SkiaSharp/HarfBuzz native libs, otherwise
          Avalonia fails at startup with DllNotFoundException: libSkiaSharp. -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -62,9 +69,5 @@
     <PackageReference Include="SharpCompress" Version="0.50.5" />
   </ItemGroup>
 
-  <!-- Windows-only system APIs (WMI / Registry) -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
-    <PackageReference Include="System.Management" Version="10.0.0" />
-  </ItemGroup>
 
 </Project>

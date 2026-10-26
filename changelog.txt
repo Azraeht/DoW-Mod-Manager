@@ -16,6 +16,7 @@ Azraeht - cross-platform edition (Linux port)
 - Added: DXVK and dgVoodoo2 install/update/remove on Windows and Linux (same files as the WinForms app); on Linux the launcher sets WINEDLLOVERRIDES so Wine loads them
 - Changed: DXVK and dgVoodoo2 are mutually exclusive (both provide d3d9.dll); a failed download leaves the installed one untouched
 - Changed: LAA (4 GB) patch is never applied to 64-bit executables
+- Changed: builds are trimmed (unused code removed): about 23 MB for the Windows EXE, about 40 MB for the Linux binary before AppImage compression
 - Not included: in-place .exe self-update and NGEN/JIT options (About links to the Releases page instead)
 
 ## Version 2.7.0.1

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core.Plugins;
@@ -39,6 +40,10 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
+    // DataValidators is marked as unsafe to trim because the plugins it holds use reflection.
+    // This only removes one of them.
+    [UnconditionalSuppressMessage("Trimming", "IL2026",
+        Justification = "Removes a plugin; no plugin is looked up or invoked by reflection.")]
     private static void DisableAvaloniaDataAnnotationValidation()
     {
         var toRemove = BindingPlugins.DataValidators

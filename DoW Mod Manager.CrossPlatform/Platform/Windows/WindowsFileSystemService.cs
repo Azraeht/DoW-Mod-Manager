@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
 using System.Runtime.Versioning;
 using DoW_Mod_Manager.Abstractions;
 using DoW_Mod_Manager.Models;
@@ -14,12 +15,12 @@ namespace DoW_Mod_Manager.Platform.Windows;
 ///   <item><c>OpenFolder</c> — <c>explorer.exe</c> (legacy <c>OpenFolderButton_Click</c>).</item>
 ///   <item><c>ShowFileProperties</c> — shell32 <c>ShellExecuteEx</c> "properties" verb
 ///         (legacy <c>WinApiCalls.ShowFileProperties</c>).</item>
-///   <item><c>CreateShortcut</c> — a Desktop <c>.lnk</c> via the WScript.Shell COM object
+///   <item><c>CreateShortcut</c> — a Desktop <c>.lnk</c> via the ShellLink COM object
 ///         (legacy <c>DownloadHelper.CreateShortcut</c> which used IWshRuntimeLibrary).</item>
 /// </list>
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class WindowsFileSystemService : IFileSystemService
+public sealed partial class WindowsFileSystemService : IFileSystemService
 {
     public void OpenFolder(string path)
     {
@@ -34,78 +35,105 @@ public sealed class WindowsFileSystemService : IFileSystemService
 
     public void CreateShortcut(ShortcutSpec spec)
     {
-        // IWshRuntimeLibrary's strongly-typed COM interop is awkward on modern .NET (it needs a
-        // generated interop assembly and BuiltInComInteropSupport which the project disables).
-        // The most robust approach that keeps zero extra dependencies is to drive the same
-        // underlying COM server (WScript.Shell) late-bound via its ProgID + reflection, which is
-        // exactly what IWshShortcut does under the hood.
         string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         string shortcutLocation = Path.Combine(desktop, spec.Name + ".lnk");
 
-        Type? shellType = Type.GetTypeFromProgID("WScript.Shell");
-        if (shellType == null)
-            throw new InvalidOperationException("WScript.Shell COM server is not available on this system.");
-
-        object? shell = Activator.CreateInstance(shellType);
-        if (shell == null)
-            throw new InvalidOperationException("Could not create the WScript.Shell COM object.");
-
-        object? shortcut = null;
+        // The ShellLink COM object behind WScript.Shell's CreateShortcut, called through
+        // source-generated COM interfaces: late-bound COM needs built-in COM interop, which the
+        // project disables and trimming removes.
+        Guid clsid = ClsidShellLink;
+        Guid iid = IidShellLinkW;
+        Marshal.ThrowExceptionForHR(CoCreateInstance(clsid, IntPtr.Zero, ClsctxInprocServer, iid, out IntPtr ptr));
+        IShellLinkW link;
         try
         {
-            shortcut = shellType.InvokeMember(
-                "CreateShortcut",
-                System.Reflection.BindingFlags.InvokeMethod,
-                binder: null,
-                target: shell,
-                args: new object[] { shortcutLocation });
-
-            if (shortcut == null)
-                throw new InvalidOperationException("WScript.Shell.CreateShortcut returned null.");
-
-            Type shortcutType = shortcut.GetType();
-
-            SetShortcutProperty(shortcutType, shortcut, "TargetPath", spec.TargetPath);
-
-            if (!string.IsNullOrEmpty(spec.Arguments))
-                SetShortcutProperty(shortcutType, shortcut, "Arguments", spec.Arguments!);
-
-            string workingDir = spec.WorkingDirectory
-                ?? Path.GetDirectoryName(spec.TargetPath)
-                ?? string.Empty;
-            if (!string.IsNullOrEmpty(workingDir))
-                SetShortcutProperty(shortcutType, shortcut, "WorkingDirectory", workingDir);
-
-            if (!string.IsNullOrEmpty(spec.Description))
-                SetShortcutProperty(shortcutType, shortcut, "Description", spec.Description!);
-
-            if (!string.IsNullOrEmpty(spec.IconPath))
-                SetShortcutProperty(shortcutType, shortcut, "IconLocation", spec.IconPath!);
-
-            shortcutType.InvokeMember(
-                "Save",
-                System.Reflection.BindingFlags.InvokeMethod,
-                binder: null,
-                target: shortcut,
-                args: Array.Empty<object>());
+            link = (IShellLinkW)ShellComWrappers.GetOrCreateObjectForComInstance(ptr, CreateObjectFlags.None);
         }
         finally
         {
-            if (shortcut != null && Marshal.IsComObject(shortcut))
-                Marshal.FinalReleaseComObject(shortcut);
-            if (Marshal.IsComObject(shell))
-                Marshal.FinalReleaseComObject(shell);
+            Marshal.Release(ptr);
         }
+
+        link.SetPath(spec.TargetPath);
+
+        if (!string.IsNullOrEmpty(spec.Arguments))
+            link.SetArguments(spec.Arguments!);
+
+        string workingDir = spec.WorkingDirectory
+            ?? Path.GetDirectoryName(spec.TargetPath)
+            ?? string.Empty;
+        if (!string.IsNullOrEmpty(workingDir))
+            link.SetWorkingDirectory(workingDir);
+
+        if (!string.IsNullOrEmpty(spec.Description))
+            link.SetDescription(spec.Description!);
+
+        if (!string.IsNullOrEmpty(spec.IconPath))
+        {
+            // WScript.Shell's IconLocation format: "path" or "path,index".
+            string iconPath = spec.IconPath!;
+            int iconIndex = 0;
+            int comma = iconPath.LastIndexOf(',');
+            if (comma > 0 && int.TryParse(iconPath.AsSpan(comma + 1).Trim(), out int index))
+            {
+                iconIndex = index;
+                iconPath = iconPath[..comma].TrimEnd();
+            }
+            link.SetIconLocation(iconPath, iconIndex);
+        }
+
+        ((IPersistFile)link).Save(shortcutLocation, true);
     }
 
-    static void SetShortcutProperty(Type shortcutType, object shortcut, string property, string value)
+    // --- ShellLink COM object (shobjidl_core.h / objidl.h) ---
+
+    static readonly Guid ClsidShellLink = new("00021401-0000-0000-C000-000000000046");
+    static readonly Guid IidShellLinkW = new("000214F9-0000-0000-C000-000000000046");
+    const uint ClsctxInprocServer = 1;
+
+    static readonly StrategyBasedComWrappers ShellComWrappers = new();
+
+    [LibraryImport("ole32.dll")]
+    private static partial int CoCreateInstance(in Guid rclsid, IntPtr pUnkOuter, uint dwClsContext, in Guid riid, out IntPtr ppv);
+
+    /// <summary>
+    /// IShellLinkW in vtable order. Only the setters are called; the other methods hold their
+    /// slots and use raw pointers.
+    /// </summary>
+    [GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
+    [Guid("000214F9-0000-0000-C000-000000000046")]
+    internal partial interface IShellLinkW
     {
-        shortcutType.InvokeMember(
-            property,
-            System.Reflection.BindingFlags.SetProperty,
-            binder: null,
-            target: shortcut,
-            args: new object[] { value });
+        void GetPath(IntPtr pszFile, int cch, IntPtr pfd, uint fFlags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription(IntPtr pszName, int cch);
+        void SetDescription(string pszName);
+        void GetWorkingDirectory(IntPtr pszDir, int cch);
+        void SetWorkingDirectory(string pszDir);
+        void GetArguments(IntPtr pszArgs, int cch);
+        void SetArguments(string pszArgs);
+        void GetHotkey(out ushort pwHotkey);
+        void SetHotkey(ushort wHotkey);
+        void GetShowCmd(out int piShowCmd);
+        void SetShowCmd(int iShowCmd);
+        void GetIconLocation(IntPtr pszIconPath, int cch, out int piIcon);
+        void SetIconLocation(string pszIconPath, int iIcon);
+        void SetRelativePath(string pszPathRel, uint dwReserved);
+        void Resolve(IntPtr hwnd, uint fFlags);
+        void SetPath(string pszFile);
+    }
+
+    /// <summary>IPersistFile (with IPersist's GetClassID first), up to Save.</summary>
+    [GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
+    [Guid("0000010B-0000-0000-C000-000000000046")]
+    internal partial interface IPersistFile
+    {
+        void GetClassID(out Guid pClassID);
+        [PreserveSig]
+        int IsDirty();
+        void Load(string pszFileName, uint dwMode);
+        void Save(string pszFileName, [MarshalAs(UnmanagedType.Bool)] bool fRemember);
     }
 
     // --- shell32 ShellExecuteEx "properties" verb (ported from WinApiCalls) ---

@@ -33,7 +33,7 @@ Single multi-targeted project `DoW Mod Manager.CrossPlatform/DowModManager.cspro
 
 - `net10.0` — built everywhere (Linux dev + CI).
 - `net10.0-windows` — added automatically on Windows / CI; the **only** TFM that compiles
-  `Platform/Windows/**` (P/Invoke, Registry, WMI). Guard Windows code with the `WINDOWS`
+  `Platform/Windows/**` (P/Invoke, COM, Registry). Guard Windows code with the `WINDOWS`
   compile constant or `[SupportedOSPlatform("windows")]`.
 
 ```

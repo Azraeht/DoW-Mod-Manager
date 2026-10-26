@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using DoW_Mod_Manager.Models;
 using DoW_Mod_Manager.Services;
 using DoW_Mod_Manager.ViewModels;
@@ -9,7 +10,8 @@ namespace DoW_Mod_Manager.Composition;
 /// <summary><see cref="IFeatureViewModelFactory"/> backed by <see cref="ActivatorUtilities"/>.</summary>
 public sealed class FeatureViewModelFactory(IServiceProvider services) : IFeatureViewModelFactory
 {
-    private T Create<T>(params object[] args) => ActivatorUtilities.CreateInstance<T>(services, args);
+    private T Create<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>(params object[] args) =>
+        ActivatorUtilities.CreateInstance<T>(services, args);
 
     public ModMergerViewModel CreateModMerger(GameInstall install, Action onModulesChanged) =>
         Create<ModMergerViewModel>(install, onModulesChanged);
