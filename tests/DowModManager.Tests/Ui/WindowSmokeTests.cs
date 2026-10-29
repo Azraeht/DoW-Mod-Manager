@@ -101,7 +101,7 @@ namespace DowModManager.Tests.Ui
         [AvaloniaFact]
         public void ModDownloaderWindow_Renders()
         {
-            var vm = Factory.CreateModDownloader(_install);
+            var vm = Factory.CreateModDownloader(_install, () => { });
             Dispatcher.UIThread.RunJobs();
             SpinWait.SpinUntil(() => !vm.IsLoading, TimeSpan.FromSeconds(5));
             Dispatcher.UIThread.RunJobs();

@@ -40,6 +40,7 @@ public partial class ModDownloaderViewModel : ViewModelBase
     private readonly IGameLauncher _launcher;
     private readonly IModInstallService _installer;
     private readonly GameInstall _install;
+    private readonly Action _onModulesChanged;
     private IReadOnlyList<ModListEntry> _all = [];
     private CancellationTokenSource? _operation;
 
@@ -73,19 +74,22 @@ public partial class ModDownloaderViewModel : ViewModelBase
     /// <param name="moduleFilter">
     /// Name of a missing required module (the "fix missing mod" flow): the list starts filtered on it.
     /// </param>
+    /// <param name="onModulesChanged">Called after a mod was installed or uninstalled, so the main list reloads.</param>
     public ModDownloaderViewModel(
         GameInstall install,
         string moduleFilter,
         IModlistService modlist,
         IDialogService dialogs,
         IGameLauncher launcher,
-        IModInstallService installer)
+        IModInstallService installer,
+        Action onModulesChanged)
     {
         _modlist = modlist;
         _dialogs = dialogs;
         _launcher = launcher;
         _installer = installer;
         _install = install;
+        _onModulesChanged = onModulesChanged;
         _searchText = moduleFilter;
 
         Header = "Popular mods for " + install.Variant switch
@@ -188,6 +192,8 @@ public partial class ModDownloaderViewModel : ViewModelBase
 
             var result = await _installer.InstallAsync(_install, mod, files, progress, ct);
             Status = result.Message;
+            if (result.Success)
+                _onModulesChanged();
         }
         catch (OperationCanceledException)
         {
@@ -217,6 +223,8 @@ public partial class ModDownloaderViewModel : ViewModelBase
         {
             var result = await _installer.UninstallAsync(_install, mod, new Progress<ModInstallProgress>(ShowProgress), ct);
             Status = result.Message;
+            if (result.Success)
+                _onModulesChanged();
         }
         catch (OperationCanceledException)
         {

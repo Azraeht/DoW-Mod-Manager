@@ -16,8 +16,8 @@ public sealed class FeatureViewModelFactory(IServiceProvider services) : IFeatur
     public ModMergerViewModel CreateModMerger(GameInstall install, Action onModulesChanged) =>
         Create<ModMergerViewModel>(install, onModulesChanged);
 
-    public ModDownloaderViewModel CreateModDownloader(GameInstall install, string moduleFilter = "") =>
-        Create<ModDownloaderViewModel>(install, moduleFilter);
+    public ModDownloaderViewModel CreateModDownloader(GameInstall install, Action onModulesChanged, string moduleFilter = "") =>
+        Create<ModDownloaderViewModel>(install, moduleFilter, onModulesChanged);
 
     public SettingsViewModel CreateSettings(GameInstall install, Action<LaunchFlagChange> applyLaunchFlags) =>
         Create<SettingsViewModel>(install, applyLaunchFlags);

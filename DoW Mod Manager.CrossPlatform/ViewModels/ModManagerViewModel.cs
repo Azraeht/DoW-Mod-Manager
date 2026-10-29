@@ -563,7 +563,7 @@ public partial class ModManagerViewModel : ViewModelBase
     private void OpenModDownloader()
     {
         if (SelectedInstall is not null)
-            _dialogs.ShowWindow(_features.CreateModDownloader(SelectedInstall));
+            _dialogs.ShowWindow(_features.CreateModDownloader(SelectedInstall, ReloadMods));
     }
 
     private bool CanFixMissingMod => SelectedRequiredMod is { IsInstalled: false };
@@ -581,7 +581,7 @@ public partial class ModManagerViewModel : ViewModelBase
             return;
         }
 
-        _dialogs.ShowWindow(_features.CreateModDownloader(SelectedInstall, name));
+        _dialogs.ShowWindow(_features.CreateModDownloader(SelectedInstall, ReloadMods, name));
     }
 
     [RelayCommand]

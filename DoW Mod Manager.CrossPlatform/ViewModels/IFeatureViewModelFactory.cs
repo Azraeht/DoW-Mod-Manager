@@ -11,7 +11,7 @@ namespace DoW_Mod_Manager.ViewModels;
 public interface IFeatureViewModelFactory
 {
     ModMergerViewModel CreateModMerger(GameInstall install, Action onModulesChanged);
-    ModDownloaderViewModel CreateModDownloader(GameInstall install, string moduleFilter = "");
+    ModDownloaderViewModel CreateModDownloader(GameInstall install, Action onModulesChanged, string moduleFilter = "");
     SettingsViewModel CreateSettings(GameInstall install, Action<LaunchFlagChange> applyLaunchFlags);
     SystemPerformanceViewModel CreateSystemPerformance(GameInstall install);
     FontsManagerViewModel CreateFontsManager(GameInstall install, string gameScreenWidth);
