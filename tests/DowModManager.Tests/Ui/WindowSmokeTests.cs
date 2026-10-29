@@ -160,7 +160,7 @@ namespace DowModManager.Tests.Ui
             vm.ModManager.LoadManualPathCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
 
-            Render(new MainWindow { Width = 900, Height = 660 }, vm, "main");
+            Render(new MainWindow { Width = 940, Height = 660 }, vm, "main");
         }
 
         private sealed class BindingErrorSink : ILogSink

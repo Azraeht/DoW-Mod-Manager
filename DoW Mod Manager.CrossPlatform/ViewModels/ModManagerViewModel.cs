@@ -48,7 +48,13 @@ public partial class ModManagerViewModel : ViewModelBase
 
     [ObservableProperty] private string _manualPath = "";
     [ObservableProperty] private string _status = "Discovering Dawn of War installations…";
+    [NotifyPropertyChangedFor(nameof(IsLaaEnabled))]
+    [NotifyPropertyChangedFor(nameof(IsLaaDisabled))]
     [ObservableProperty] private string _laaStatus = "";
+
+    /// <summary>Colours the LAA status label green or red, like the legacy UI.</summary>
+    public bool IsLaaEnabled => LaaStatus == "LAA: Enabled";
+    public bool IsLaaDisabled => LaaStatus == "LAA: Disabled";
 
     /// <summary>False for 64-bit (Definitive Edition) or unreadable executables — the toggle is disabled.</summary>
     [NotifyCanExecuteChangedFor(nameof(ToggleLaaCommand))]
@@ -106,6 +112,11 @@ public partial class ModManagerViewModel : ViewModelBase
     public bool PerfTweaksSupported => _platform.IsWindows;
 
     public bool IsDefinitiveEdition => SelectedInstall?.Variant == GameVariant.DefinitiveEdition;
+
+    /// <summary>Green check (all required mods installed) or red cross next to START MOD, like the legacy UI.</summary>
+    public bool HasRequiredMods => RequiredMods.Count > 0;
+    public bool AllRequiredModsInstalled => HasRequiredMods && RequiredMods.All(d => d.IsInstalled);
+    public bool SomeRequiredModsMissing => HasRequiredMods && !AllRequiredModsInstalled;
 
     /// <summary>
     /// Tooltip of the DXVK / dgVoodoo2 buttons. On Linux the files replace Proton's own DXVK: the
@@ -216,23 +227,23 @@ public partial class ModManagerViewModel : ViewModelBase
     private void ResolveDependencies()
     {
         RequiredMods.Clear();
-        if (SelectedInstall is null || SelectedMod is null)
+        if (SelectedInstall is not null && SelectedMod is not null)
         {
-            StartModCommand.NotifyCanExecuteChanged();
-            return;
-        }
-
-        try
-        {
-            foreach (var dep in _mods.ResolveDependencies(SelectedInstall, SelectedMod))
-                RequiredMods.Add(dep);
-        }
-        catch (Exception ex)
-        {
-            Status = $"Failed to resolve dependencies: {ex.Message}";
+            try
+            {
+                foreach (var dep in _mods.ResolveDependencies(SelectedInstall, SelectedMod))
+                    RequiredMods.Add(dep);
+            }
+            catch (Exception ex)
+            {
+                Status = $"Failed to resolve dependencies: {ex.Message}";
+            }
         }
 
         StartModCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(HasRequiredMods));
+        OnPropertyChanged(nameof(AllRequiredModsInstalled));
+        OnPropertyChanged(nameof(SomeRequiredModsMissing));
     }
 
     private void LoadSettings(GameInstall install)
